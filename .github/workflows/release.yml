@@ -45,9 +45,11 @@ jobs:
           fi
           version=${tag#v}
           IFS=. read -r major minor patch <<< "$version"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "name=$version" >> "$GITHUB_OUTPUT"
-          echo "code=$((major * 10000 + minor * 100 + ${patch:-0}))" >> "$GITHUB_OUTPUT"
+          {
+            echo "tag=$tag"
+            echo "name=$version"
+            echo "code=$((major * 10000 + minor * 100 + ${patch:-0}))"
+          } >> "$GITHUB_OUTPUT"
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
@@ -64,14 +66,14 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          props="-PversionName=${{ steps.version.outputs.name }} -PversionCode=${{ steps.version.outputs.code }}"
+          props=(-PversionName="${{ steps.version.outputs.name }}" -PversionCode="${{ steps.version.outputs.code }}")
           if [ -n "${KEYSTORE_BASE64}" ]; then
             echo "${KEYSTORE_BASE64}" | base64 -d > "${RUNNER_TEMP}/release.jks"
             export BRIAREUS_KEYSTORE="${RUNNER_TEMP}/release.jks"
-            ./gradlew :core:test assembleRelease $props --console=plain
+            ./gradlew :core:test assembleRelease "${props[@]}" --console=plain
             cp app/build/outputs/apk/release/app-release.apk dist/Briareus-quest.apk
           else
-            ./gradlew :core:test assembleDebug $props --console=plain
+            ./gradlew :core:test assembleDebug "${props[@]}" --console=plain
             cp app/build/outputs/apk/debug/app-debug.apk dist/Briareus-quest.apk
           fi
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3

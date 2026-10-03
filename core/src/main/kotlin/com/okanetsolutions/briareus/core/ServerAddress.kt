@@ -12,6 +12,7 @@ data class ServerAddress(val origin: String, val host: String, val port: Int?) {
          * Reads what the user typed: `https://host[:port]`, optionally ending in `/api/v1`. No credentials, query, fragment
          * or other path, and never plain HTTP.
          */
+        @Suppress("CyclomaticComplexMethod") // One rule per branch, read top to bottom; splitting it would hide the order.
         fun parse(input: String): ServerAddress? {
             val text = input.trim()
             if (!text.regionMatches(0, "https://", 0, 8, ignoreCase = true)) return null

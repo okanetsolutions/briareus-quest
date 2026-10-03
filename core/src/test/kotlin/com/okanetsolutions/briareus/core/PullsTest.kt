@@ -48,7 +48,10 @@ class PullsTest {
     }
 
     @Test fun readsErrands() {
-        val errands = Errand.list(json("""{"actions":[{"id":"review","label":"Code review","input":null},{"id":"feedback","label":"Give feedback","input":{"label":"What to say","required":true}},{"label":"no id"}]}"""))
+        val errands = Errand.list(json(
+            """{"actions":[{"id":"review","label":"Code review","input":null},{"id":"feedback","label":"Give feedback","input":{"label":"What to say","required":true}},""" +
+                """{"label":"no id"}]}""",
+        ))
         assertEquals(listOf("review", "feedback"), errands.map { it.id })
         assertNull(errands[0].inputLabel)
         assertEquals("What to say", errands[1].inputLabel)
@@ -61,7 +64,8 @@ class PullsTest {
                 """{"pr":{"number":5,"title":"T","state":"open","draft":true,"headSha":"abc","headRef":"feat","baseRef":"main","additions":3,"deletions":1,
                 "changedFiles":2,"commits":1,"commitList":[{"sha":"abc","message":"First","url":"https://c"}],"issues":[],
                 "reviews":[{"user":"r","state":"CHANGES_REQUESTED","url":null}],
-                "checks":{"total":3,"passed":1,"failed":1,"pending":1,"runs":[{"name":"ci","status":"completed","conclusion":"success","failed":false},{"name":"lint","status":"in_progress","conclusion":null}]}}}""",
+                "checks":{"total":3,"passed":1,"failed":1,"pending":1,"runs":[{"name":"ci","status":"completed","conclusion":"success","failed":false},""" +
+                """{"name":"lint","status":"in_progress","conclusion":null}]}}}""",
             ),
         )!!
         assertEquals("draft", pr.state)

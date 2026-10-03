@@ -1,0 +1,79 @@
+# detekt, on top of its defaults (buildUponDefaultConfig). Only what this codebase does on purpose is relaxed here:
+# wide lines with a comment that says why, Compose functions named like types, and `runCatching`-style error handling
+# where a failure is shown to the user rather than typed. Everything else stays at the default.
+
+build:
+  maxIssues: 0
+
+complexity:
+  LongMethod:
+    # Compose screens are one function per screen.
+    ignoreAnnotated: ['Composable']
+    threshold: 80
+  LongParameterList:
+    ignoreAnnotated: ['Composable']
+    functionThreshold: 8
+    constructorThreshold: 8
+  TooManyFunctions:
+    thresholdInClasses: 25
+    thresholdInObjects: 25
+    thresholdInFiles: 25
+  CyclomaticComplexMethod:
+    ignoreAnnotated: ['Composable']
+    threshold: 20
+  CognitiveComplexMethod:
+    active: false
+  ComplexCondition:
+    threshold: 5
+  NestedBlockDepth:
+    threshold: 5
+
+empty-blocks:
+  EmptyElseBlock:
+    # detekt 1.23 misreads `{ if (x) a; b }` on one line as an empty else; the pattern is deliberate here.
+    active: false
+
+exceptions:
+  TooGenericExceptionCaught:
+    # Network and parse failures are reported to the user as text, not retyped.
+    active: false
+  SwallowedException:
+    active: false
+  TooGenericExceptionThrown:
+    active: false
+
+naming:
+  FunctionNaming:
+    ignoreAnnotated: ['Composable']
+  TopLevelPropertyNaming:
+    active: false
+  MatchingDeclarationName:
+    active: false
+
+performance:
+  SpreadOperator:
+    active: false
+
+style:
+  MaxLineLength:
+    # Wide lines are the house style; .editorconfig sets no limit, this is the ceiling.
+    maxLineLength: 200
+    excludeCommentStatements: true
+  MagicNumber:
+    active: false
+  ReturnCount:
+    active: false
+  ThrowsCount:
+    active: false
+  UnusedPrivateMember:
+    ignoreAnnotated: ['Preview']
+  ForbiddenComment:
+    active: false
+  LoopWithTooManyJumpStatements:
+    active: false
+  DestructuringDeclarationWithTooManyEntries:
+    maxDestructuringEntries: 4
+  WildcardImport:
+    active: true
+  UnnecessaryAbstractClass:
+    active: false
