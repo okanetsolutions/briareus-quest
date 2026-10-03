@@ -11,17 +11,16 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import androidx.core.app.RemoteInput
 import com.okanetsolutions.briareus.core.Alert
 
 /**
- * The headset's notifications: one per conversation that needs you, with a reply box for a question or a finished turn
- * and the agent's suggested answers as buttons, so you can answer without leaving the video you are watching.
+ * The headset's notifications: one per conversation that needs you, with the agent's suggested answers as buttons, so
+ * you can answer without leaving the video you are watching. Anything else is answered by voice in the conversation:
+ * "Reply by voice" opens it, since the notification's own reply box would bring up the system keyboard.
  */
 object Notifier {
     const val CHANNEL_ALERTS = "alerts"
     const val CHANNEL_SERVICE = "service"
-    const val KEY_REPLY = "reply"
     const val SERVICE_ID = 1
 
     fun createChannels(context: Context) {
@@ -61,15 +60,7 @@ object Notifier {
             .setAutoCancel(true)
             .setContentIntent(ConversationActivity.pendingIntent(context, alert.sessionId))
         if (alert.repliable && context.store.can("message")) {
-            val input = RemoteInput.Builder(KEY_REPLY)
-                .setLabel(if (alert.kind == Alert.Kind.QUESTION) "Answer" else "Reply")
-                .setChoices(options.take(3).toTypedArray())
-                .build()
-            val reply = NotificationCompat.Action.Builder(R.drawable.ic_notification, "Reply", ReplyReceiver.pendingIntent(context, alert.sessionId, null))
-                .addRemoteInput(input)
-                .setAllowGeneratedReplies(false)
-                .build()
-            builder.addAction(reply)
+            builder.addAction(R.drawable.ic_notification, "Reply by voice", ConversationActivity.pendingIntent(context, alert.sessionId))
             // The agent's own options as one-tap answers, for a headset where typing is slow.
             for ((index, option) in options.take(2).withIndex()) {
                 builder.addAction(R.drawable.ic_notification, option, ReplyReceiver.pendingIntent(context, alert.sessionId, option, index + 1))

@@ -17,7 +17,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -128,7 +127,7 @@ private fun WaitingCard(store: Store, s: Session, onOpen: (String) -> Unit) {
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(reply, { reply = it }, Modifier.weight(1f), placeholder = { Text("Reply") }, singleLine = true)
+                VoiceField(store, reply, { reply = it }, Modifier.weight(1f), placeholder = "Record a reply", maxHeight = 140.dp, enabled = !sending)
                 TextButton(onClick = { send(reply) }, enabled = reply.isNotBlank() && !sending) { Text("Send") }
             }
         }

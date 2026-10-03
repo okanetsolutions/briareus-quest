@@ -130,12 +130,16 @@ private val PaneSaver = androidx.compose.runtime.saveable.Saver<Pane?, String>(
             null -> ""
             is Pane.New -> "new:" + pane.repo.orEmpty()
             is Pane.Open -> "open:" + pane.sessionId
+            is Pane.Pulls -> "pulls:" + pane.repo
+            is Pane.Pull -> "pull:" + pane.number + ":" + pane.repo
         }
     },
     restore = { s ->
         when {
             s.startsWith("open:") -> Pane.Open(s.removePrefix("open:"))
             s.startsWith("new:") -> Pane.New(s.removePrefix("new:").ifEmpty { null })
+            s.startsWith("pulls:") -> Pane.Pulls(s.removePrefix("pulls:"))
+            s.startsWith("pull:") -> s.removePrefix("pull:").let { rest -> rest.substringBefore(':').toIntOrNull()?.let { Pane.Pull(rest.substringAfter(':'), it) } }
             else -> null
         }
     },

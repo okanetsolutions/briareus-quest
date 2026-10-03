@@ -6,6 +6,7 @@ import com.okanetsolutions.briareus.core.ApiClient
 import com.okanetsolutions.briareus.core.ApiError
 import com.okanetsolutions.briareus.core.BriareusJson
 import com.okanetsolutions.briareus.core.Connection
+import com.okanetsolutions.briareus.core.Discovery
 import com.okanetsolutions.briareus.core.Project
 import com.okanetsolutions.briareus.core.RuntimeCatalog
 import com.okanetsolutions.briareus.core.ServerAddress
@@ -158,6 +159,16 @@ class Store(context: Context) {
     }
 
     fun can(call: String): Boolean = _connection.value?.can(call) == true
+
+    /** Tells the user something, as a toast in the window they are in. */
+    fun say(text: String) {
+        _messages.tryEmit(text)
+    }
+
+    /** Why voice notes cannot be recorded here, or null when they can. */
+    fun voiceNotesOff(): String? =
+        if (!can("transcribe")) "This server cannot transcribe voice notes, or this token may not ask it to."
+        else Discovery.voiceNotesOff(_connection.value?.transcribe)
 
     // MARK: - Projects and conversations
 
