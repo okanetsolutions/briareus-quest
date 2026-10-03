@@ -189,8 +189,8 @@ data class SpaceLayout(val panels: List<Pair<SpacePanel, Placement>>) {
         const val MAX_SCALE = 2.5
         const val MAX_HEIGHT = 1.0
 
-        /** The space as it opens: the main window ahead, the status panel on the left and the voice on the right. */
-        val START = SpaceLayout(listOf(SpacePanel.Main to home(SpacePanel.Main), SpacePanel.Status to home(SpacePanel.Status), SpacePanel.Voice to home(SpacePanel.Voice)))
+        /** The space as it opens: the main window ahead and the voice on the right. The status panel opens when asked for, on the left. */
+        val START = SpaceLayout(listOf(SpacePanel.Main to home(SpacePanel.Main), SpacePanel.Voice to home(SpacePanel.Voice)))
 
         /** Where each kind of panel first appears. */
         fun home(panel: SpacePanel): Placement = when (panel) {

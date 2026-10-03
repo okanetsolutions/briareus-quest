@@ -10,16 +10,20 @@ class SpaceTest {
     private fun SpaceLayout.at(panel: SpacePanel) = this[panel.key]!!.second
     private val diff = SpacePanel.Diff("acme/api", 7)
     private val pull = SpacePanel.Pull("acme/api", 7)
+    /** The space with the status panel opened beside the main window. */
+    private val withStatus = SpaceLayout.START.show(SpacePanel.Status, focus = false)
 
-    @Test fun opensWithTheMainWindowAheadAndTheSidePanelsBesideIt() {
+    @Test fun opensWithTheMainWindowAheadAndTheVoiceBesideIt() {
         val l = SpaceLayout.START
         assertEquals(SpacePanel.Main, l.front)
-        assertEquals("to the left", l.at(SpacePanel.Status).where)
         assertEquals("to the right", l.at(SpacePanel.Voice).where)
+        assertNull(l[SpacePanel.Status.key])
+        // The status panel opens where it belongs, on the left.
+        assertEquals("to the left", withStatus.at(SpacePanel.Status).where)
     }
 
     @Test fun somethingShownComesToTheFrontAndTheMainWindowStepsAside() {
-        val l = SpaceLayout.START.show(diff)
+        val l = withStatus.show(diff)
         assertEquals(diff, l.front)
         assertEquals(-100.0, l.at(SpacePanel.Main).yaw, 0.0)
         // Status and voice keep their places.
@@ -28,7 +32,7 @@ class SpaceTest {
     }
 
     @Test fun eachPullRequestIsAScreenOfItsOwn() {
-        val l = SpaceLayout.START.show(pull).show(SpacePanel.Pull("acme/api", 9)).show(diff)
+        val l = withStatus.show(pull).show(SpacePanel.Pull("acme/api", 9)).show(diff)
         assertEquals(6, l.panels.size)
         assertEquals(diff, l.front)
         // Every screen has a place of its own.
@@ -37,7 +41,7 @@ class SpaceTest {
     }
 
     @Test fun bringingAPanelForwardSwapsItWithTheOneInFront() {
-        val l = SpaceLayout.START.move("status", SpaceMove.FRONT)!!
+        val l = withStatus.move("status", SpaceMove.FRONT)!!
         assertEquals(SpacePanel.Status, l.front)
         assertEquals(-55.0, l.at(SpacePanel.Main).yaw, 0.0)
     }
@@ -50,7 +54,7 @@ class SpaceTest {
 
     @Test fun aConversationShownBesideTakesAFreePlace() {
         val one = SpacePanel.Conversation("s1")
-        val l = SpaceLayout.START.show(one, focus = false)
+        val l = withStatus.show(one, focus = false)
         assertEquals(SpacePanel.Main, l.front)
         assertEquals(-100.0, l.at(one).yaw, 0.0)
         val two = SpacePanel.Conversation("s2")
@@ -58,7 +62,7 @@ class SpaceTest {
     }
 
     @Test fun aFullRingFillsTheRowAboveThenClosesTheOldest() {
-        var l = SpaceLayout.START
+        var l = withStatus
         (1..SpaceLayout.MAX_EXTRA).forEach { l = l.show(SpacePanel.Pull("acme/api", it)) }
         assertEquals(3 + SpaceLayout.MAX_EXTRA, l.panels.size)
         assertTrue(l.panels.any { it.second.height == SpaceLayout.ROW_HEIGHT })
@@ -83,12 +87,12 @@ class SpaceTest {
     @Test fun theMainWindowCannotBeClosedButOthersCan() {
         assertNull(SpaceLayout.START.move("main", SpaceMove.CLOSE))
         assertNull(SpaceLayout.START.move("nothing", SpaceMove.LEFT))
-        assertNull(SpaceLayout.START.move("status", SpaceMove.CLOSE)!!["status"])
+        assertNull(withStatus.move("status", SpaceMove.CLOSE)!!["status"])
     }
 
     @Test fun resetPutsEverythingBack() {
         val preview = SpacePanel.Preview("s1", "https://x")
-        val l = SpaceLayout.START.show(preview).move("status", SpaceMove.FARTHER)!!.move("x", SpaceMove.RESET)!!
+        val l = withStatus.show(preview).move("status", SpaceMove.FARTHER)!!.move("x", SpaceMove.RESET)!!
         assertEquals(SpacePanel.Main, l.front)
         assertEquals(1.4, l.at(SpacePanel.Status).distance, 0.0)
         assertEquals(100.0, l.at(preview).yaw, 0.0)
