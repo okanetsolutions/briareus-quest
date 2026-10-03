@@ -1,0 +1,82 @@
+name: Release
+
+# Every push to main (each merged pull request) cuts a release: the next minor version after the latest v* tag is tagged,
+# then the APK is built with that version and published. Pushing a v* tag by hand still releases that tag as it is.
+#
+# Signing: with the repository secrets BRIAREUS_KEYSTORE_BASE64, BRIAREUS_KEYSTORE_PASSWORD, BRIAREUS_KEY_ALIAS and
+# BRIAREUS_KEY_PASSWORD the release APK is signed with that key, so each release installs over the last one. Without
+# them the debug APK is published instead; its key is made fresh on each runner, so uninstall before installing the next.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Pick the version and tag it
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then
+            tag="${GITHUB_REF_NAME}"
+          else
+            last=$(git tag --list 'v*' --sort=-v:refname | head -n 1)
+            last=${last#v}; last=${last:-0.0.0}
+            IFS=. read -r major minor patch <<< "$last"
+            tag="v$major.$((minor + 1)).0"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$tag" -m "Briareus for Quest ${tag#v}"
+            git push origin "$tag"
+          fi
+          version=${tag#v}
+          IFS=. read -r major minor patch <<< "$version"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "name=$version" >> "$GITHUB_OUTPUT"
+          echo "code=$((major * 10000 + minor * 100 + ${patch:-0}))" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - name: Build
+        env:
+          KEYSTORE_BASE64: ${{ secrets.BRIAREUS_KEYSTORE_BASE64 }}
+          BRIAREUS_KEYSTORE_PASSWORD: ${{ secrets.BRIAREUS_KEYSTORE_PASSWORD }}
+          BRIAREUS_KEY_ALIAS: ${{ secrets.BRIAREUS_KEY_ALIAS }}
+          BRIAREUS_KEY_PASSWORD: ${{ secrets.BRIAREUS_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          props="-PversionName=${{ steps.version.outputs.name }} -PversionCode=${{ steps.version.outputs.code }}"
+          if [ -n "${KEYSTORE_BASE64}" ]; then
+            echo "${KEYSTORE_BASE64}" | base64 -d > "${RUNNER_TEMP}/release.jks"
+            export BRIAREUS_KEYSTORE="${RUNNER_TEMP}/release.jks"
+            ./gradlew :core:test assembleRelease $props --console=plain
+            cp app/build/outputs/apk/release/app-release.apk dist/Briareus-quest.apk
+          else
+            ./gradlew :core:test assembleDebug $props --console=plain
+            cp app/build/outputs/apk/debug/app-debug.apk dist/Briareus-quest.apk
+          fi
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Briareus for Quest ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
+          files: dist/Briareus-quest.apk

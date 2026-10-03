@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <uses-permission android:name="android.permission.INTERNET" />
+  <uses-permission android:name="android.permission.RECORD_AUDIO" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+  <!-- A 2D panel app: no VR mode, no controllers or hand tracking required beyond the system pointer. -->
+  <uses-feature android:name="android.hardware.microphone" android:required="false" />
+  <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+
+  <application
+    android:name=".BriareusApp"
+    android:allowBackup="false"
+    android:dataExtractionRules="@xml/data_extraction_rules"
+    android:fullBackupContent="false"
+    android:icon="@drawable/ic_launcher"
+    android:label="@string/app_name"
+    android:networkSecurityConfig="@xml/network_security_config"
+    android:supportsRtl="true"
+    android:theme="@style/Theme.Briareus">
+
+    <meta-data android:name="com.oculus.supportedDevices" android:value="quest2|quest3|quest3s|questpro" />
+
+    <!-- The main window: the projects and conversations beside the chosen conversation, wide like the dashboard. -->
+    <activity
+      android:name=".MainActivity"
+      android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation"
+      android:exported="true"
+      android:launchMode="singleTask"
+      android:resizeableActivity="true"
+      android:windowSoftInputMode="adjustResize">
+      <layout android:defaultWidth="1280dp" android:defaultHeight="800dp" android:minWidth="640dp" android:minHeight="480dp" />
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity>
+
+    <!-- One conversation in a window of its own, placed beside the others; one task per conversation. -->
+    <activity
+      android:name=".ConversationActivity"
+      android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation"
+      android:documentLaunchMode="intoExisting"
+      android:exported="false"
+      android:resizeableActivity="true"
+      android:taskAffinity=""
+      android:windowSoftInputMode="adjustResize">
+      <layout android:defaultWidth="760dp" android:defaultHeight="900dp" android:minWidth="420dp" android:minHeight="480dp" />
+    </activity>
+
+    <!-- The status panel: a narrow window to keep in the corner of your eye next to a video. -->
+    <activity
+      android:name=".StatusActivity"
+      android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation"
+      android:exported="false"
+      android:launchMode="singleTask"
+      android:resizeableActivity="true"
+      android:taskAffinity="com.okanetsolutions.briareus.quest.status">
+      <layout android:defaultWidth="400dp" android:defaultHeight="640dp" android:minWidth="320dp" android:minHeight="360dp" />
+    </activity>
+
+    <!-- Keeps GET /events open while you are in other apps, and notifies when a session needs you. -->
+    <service
+      android:name=".EventsService"
+      android:exported="false"
+      android:foregroundServiceType="dataSync" />
+
+    <receiver android:name=".ReplyReceiver" android:exported="false" />
+  </application>
+</manifest>
