@@ -1,12 +1,11 @@
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 }
 
 android {
     namespace = "com.okanetsolutions.briareus.quest"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.okanetsolutions.briareus.quest"
@@ -53,10 +52,8 @@ android {
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 }
 
+// Kotlin is built into AGP 9; its JVM target follows compileOptions.
 kotlin {
-    compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-    }
     compilerOptions { allWarningsAsErrors.set(providers.gradleProperty("werror").isPresent) }
 }
 
