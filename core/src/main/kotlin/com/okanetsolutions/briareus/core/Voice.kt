@@ -260,12 +260,15 @@ object Voice {
         val number = issue.int("number")
         val title = issue.str("title") ?: "Issue #$number"
         val s = StringBuilder("Issue #$number: $title\n\n")
-        s.append("Read $repo issue #$number in full before you change anything: `gh issue view $number --repo $repo --comments`. Its comments usually carry decisions the description was written before.\n\n")
+        s.append("Read $repo issue #$number in full before you change anything: `gh issue view $number --repo $repo --comments`. ")
+        s.append("Its comments usually carry decisions the description was written before.\n\n")
         issue.obj("parent")?.let { parent ->
             val parentRepo = parent.nonEmpty("repo") ?: repo
-            s.append("It is a sub-issue of $parentRepo#${parent.int("number")} (${parent.str("title").orEmpty()}). Read that epic too, for the shape this piece has to fit; implement only this issue.\n\n")
+            s.append("It is a sub-issue of $parentRepo#${parent.int("number")} (${parent.str("title").orEmpty()}). ")
+            s.append("Read that epic too, for the shape this piece has to fit; implement only this issue.\n\n")
         }
-        s.append("Then implement it on this session’s own branch, verify the change the way this repository verifies changes, and open a pull request whose body says `Closes #$number`, so merging it closes the issue.\n\n")
+        s.append("Then implement it on this session’s own branch, verify the change the way this repository verifies changes, ")
+        s.append("and open a pull request whose body says `Closes #$number`, so merging it closes the issue.\n\n")
         s.append("If the issue is too ambiguous to implement as written, say what is missing and stop rather than guessing at it.")
         return s.toString()
     }
@@ -493,7 +496,10 @@ enum class VoiceTool(val wire: String) {
                 SHOW_PULL_REQUESTS -> { project(); "Shows a project's open pull requests in the main window, with their checks, labels and actions." }
                 SHOW_PULL_REQUEST -> {
                     add("number", "integer", "The pull request's number, from a conversation's pull_request or list_pull_requests. Omit for the pull request on screen.", false); project()
-                    add("view", "string", "What to show. files opens GitHub's files page in the browser, as the app does not list them. Omit for the overview.", false, listOf("overview", "files", "checks", "commits"))
+                    add(
+                        "view", "string", "What to show. files opens GitHub's files page in the browser, as the app does not list them. Omit for the overview.",
+                        false, listOf("overview", "files", "checks", "commits"),
+                    )
                     add("in_browser", "boolean", "True to open its page on GitHub in the browser beside the app instead of the main window.", false)
                     "Shows one pull request in the main window: its status, description, checks, reviews, findings, linked issues and commits."
                 }
@@ -516,6 +522,7 @@ enum class VoiceTool(val wire: String) {
      * What a call with these arguments does: the client API call to make, a read-back that waits for a yes, something
      * to show, or why it cannot be made. A merge's call is planned by [VoiceMerge] once the pull request is read.
      */
+    @Suppress("CyclomaticComplexMethod") // One branch per tool, in the order they are declared.
     fun plan(input: JsonObject, context: VoiceContext): VoicePlan {
         fun text(key: String) = input.str(key)?.trim()?.takeIf { it.isNotEmpty() }
         fun number(key: String) = (input[key] as? JsonPrimitive)?.content?.toDoubleOrNull()?.toInt()?.takeIf { it >= 1 }
@@ -597,6 +604,7 @@ enum class VoiceTool(val wire: String) {
      * The answer of the call, cut to what the model needs to say it. [args] are the tool's own arguments, [sessions]
      * the conversations known when [readsConversations], and [titles] how each project is named.
      */
+    @Suppress("CyclomaticComplexMethod") // One branch per tool, in the order they are declared.
     fun summary(answer: JsonObject, input: JsonObject, sessions: List<Session> = emptyList(), titles: (String) -> String = { it.substringAfter('/') }): JsonObject = when (this) {
         LIST_CONVERSATIONS -> {
             var list = Session.list(answer).filter { it.parentId == null }.sortedByDescending { it.createdAt ?: java.time.Instant.EPOCH }
@@ -694,6 +702,7 @@ sealed interface VoiceMerge {
          * Reads `pull`'s answer, the first page of `pull_files` when there is one, and the board row when it is on the
          * board: an open, non-draft pull request merges, with what stands in its way said first.
          */
+        @Suppress("CyclomaticComplexMethod") // One rule per obstacle, in the order they are read back.
         fun check(number: Int, repo: String, pull: JsonObject, files: JsonObject?, row: JsonObject?): VoiceMerge {
             val pr = pull.obj("pr") ?: JsonObject(emptyMap())
             val live = files?.obj("pr")

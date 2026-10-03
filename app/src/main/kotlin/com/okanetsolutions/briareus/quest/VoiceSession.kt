@@ -1,6 +1,7 @@
 package com.okanetsolutions.briareus.quest
 
 import android.content.Context
+import com.okanetsolutions.briareus.core.ApiClient
 import com.okanetsolutions.briareus.core.ApiError
 import com.okanetsolutions.briareus.core.BriareusJson
 import com.okanetsolutions.briareus.core.Session
@@ -268,7 +269,7 @@ class VoiceSession(context: Context, private val store: Store, private val navig
             is VoicePlan.Refuse -> fail(plan.why)
             is VoicePlan.Confirm -> {
                 readBacks[key] = heard
-                finish(Step.State.Waiting, args("needs_confirmation" to true, "read_back" to plan.readBack, "next" to "Read this back to the user. Call again with confirmed=true only if they say yes."))
+                finish(Step.State.Waiting, confirmation(plan.readBack, "Read this back to the user."))
             }
             is VoicePlan.Show -> try {
                 finish(Step.State.Done, args("done" to true, "on_screen" to navigator.show(plan.action)))
@@ -296,19 +297,7 @@ class VoiceSession(context: Context, private val store: Store, private val navig
                     ?: return fail("Issue #$number is not open on ${store.projectTitle(repo)}.")
             }
             val answer = client.call(operation, arguments, TIMEOUT)
-            var full = answer
-            // An issue's comments are on its timeline, oldest first: a few of its pages are read, for the latest.
-            if (tool == VoiceTool.READ_ISSUE && store.can("issue_timeline")) {
-                val rows = ArrayList<JsonObject>()
-                var page = 1
-                repeat(Voice.ISSUE_TIMELINE_PAGES) {
-                    if (page == 0) return@repeat
-                    val timeline = runCatching { client.call("issue_timeline", JsonObject(arguments + ("page" to JsonPrimitive(page))), TIMEOUT) }.getOrNull()
-                    rows += timeline?.objects("events").orEmpty()
-                    page = timeline?.int("nextPage") ?: 0
-                }
-                full = JsonObject(answer + ("timeline" to JsonArray(rows)))
-            }
+            val full = if (tool == VoiceTool.READ_ISSUE && store.can("issue_timeline")) JsonObject(answer + ("timeline" to timeline(client, arguments))) else answer
             Session.parse(answer["session"])?.let { if (tool.changes) store.upsert(it) }
             readBacks.remove(key)
             val repo = planned.str("repo")
@@ -316,11 +305,30 @@ class VoiceSession(context: Context, private val store: Store, private val navig
             finish(Step.State.Done, tool.summary(full, step.input, sessions, store::projectTitle))
         } catch (e: CancellationException) {
             throw e
+        } catch (e: ApiError) {
+            if (e.unauthorized) store.failed(e)
+            fail(e.description)
         } catch (e: Exception) {
-            if (e is ApiError && e.unauthorized) store.failed(e)
-            fail((e as? ApiError)?.description ?: e.message ?: "The call failed.")
+            fail(e.message ?: "The call failed.")
         }
     }
+
+    /** An issue's comments are on its timeline, oldest first: a few of its pages are read, for the latest. */
+    private suspend fun timeline(client: ApiClient, place: JsonObject): JsonArray {
+        val rows = ArrayList<JsonObject>()
+        var page = 1
+        repeat(Voice.ISSUE_TIMELINE_PAGES) {
+            if (page == 0) return@repeat
+            val timeline = runCatching { client.call("issue_timeline", JsonObject(place + ("page" to JsonPrimitive(page))), TIMEOUT) }.getOrNull()
+            rows += timeline?.objects("events").orEmpty()
+            page = timeline?.int("nextPage") ?: 0
+        }
+        return JsonArray(rows)
+    }
+
+    /** What a change answers before the user's yes: what to read back, and that only a yes lets it through. */
+    private fun confirmation(readBack: String, how: String) =
+        args("needs_confirmation" to true, "read_back" to readBack, "next" to "$how Call again with confirmed=true only if they say yes.")
 
     /**
      * Merges a pull request: the first call reads it and reads back what stands in the way; the confirmed one merges the
@@ -355,7 +363,7 @@ class VoiceSession(context: Context, private val store: Store, private val navig
                     is VoiceMerge.Ready -> {
                         readBacks[key] = heard
                         merges[key] = check.arguments to check.base
-                        Step.State.Waiting to args("needs_confirmation" to true, "read_back" to check.readBack, "next" to "Read all of this to the user. Call again with confirmed=true only if they say yes.")
+                        Step.State.Waiting to confirmation(check.readBack, "Read all of this to the user.")
                     }
                 }
             }

@@ -39,6 +39,7 @@ class Navigator(context: Context, private val store: Store) {
     }
 
     /** Carries out [action] and says what is on screen now. Throws when a window cannot be opened. */
+    @Suppress("CyclomaticComplexMethod") // One branch per action, each saying what it left on screen.
     fun show(action: ScreenAction): String {
         val sessions = store.sessions.value
         fun title(id: String) = sessions[id]?.title ?: "the conversation"
