@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -22,7 +23,7 @@ import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.GraphicEq
-import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.automirrored.outlined.MergeType
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -31,7 +32,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -57,10 +57,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.Instant
 
-/** What the right pane shows: the new session composer, or a conversation. Null is nothing chosen yet. */
+/** What the right pane shows: the new session composer, a conversation, or pull requests. Null is nothing chosen yet. */
 sealed interface Pane {
     data class New(val repo: String? = null, val prompt: String? = null) : Pane
     data class Open(val sessionId: String) : Pane
+    data class Pulls(val repo: String) : Pane
+    data class Pull(val repo: String, val number: Int) : Pane
 }
 
 /**
@@ -72,8 +74,6 @@ fun HomeScreen(
     store: Store,
     pane: Pane?,
     onPane: (Pane?) -> Unit,
-    query: String,
-    onQuery: (String) -> Unit,
     onPopOut: (String) -> Unit,
     onStatusWindow: () -> Unit,
     voiceOn: Boolean,
@@ -85,12 +85,12 @@ fun HomeScreen(
     BoxWithConstraints(Modifier.fillMaxSize().background(p.canvas)) {
         if (maxWidth >= 900.dp) {
             Row(Modifier.fillMaxSize()) {
-                Sidebar(store, pane, onPane, query, onQuery, header, Modifier.width(320.dp).fillMaxHeight())
+                Sidebar(store, pane, onPane, header, Modifier.width(320.dp).fillMaxHeight())
                 VerticalDivider(color = p.line)
                 Box(Modifier.weight(1f).fillMaxHeight()) { Detail(store, pane ?: Pane.New(), onPane, onPopOut, back = null) }
             }
         } else if (pane == null) {
-            Sidebar(store, null, onPane, query, onQuery, header, Modifier.fillMaxSize())
+            Sidebar(store, null, onPane, header, Modifier.fillMaxSize())
         } else {
             Detail(store, pane, onPane, onPopOut, back = { onPane(null) })
         }
@@ -105,6 +105,8 @@ private fun Detail(store: Store, pane: Pane, onPane: (Pane?) -> Unit, onPopOut: 
             NewSessionScreen(store, pane.repo, pane.prompt) { onPane(Pane.Open(it)) }
         }
         is Pane.Open -> ConversationScreen(store, pane.sessionId, onBack = back, onPopOut = { onPopOut(pane.sessionId) }, onDeleted = { onPane(null) })
+        is Pane.Pulls -> PullsScreen(store, pane.repo, onPane, back)
+        is Pane.Pull -> PullScreen(store, pane.repo, pane.number, onPane)
     }
 }
 
@@ -114,7 +116,7 @@ private class SidebarHeader(val onStatusWindow: () -> Unit, val voiceOn: Boolean
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun Sidebar(
-    store: Store, pane: Pane?, onPane: (Pane?) -> Unit, query: String, onQuery: (String) -> Unit, header: SidebarHeader, modifier: Modifier,
+    store: Store, pane: Pane?, onPane: (Pane?) -> Unit, header: SidebarHeader, modifier: Modifier,
 ) {
     val p = LocalPalette.current
     val scope = rememberCoroutineScope()
@@ -123,7 +125,7 @@ private fun Sidebar(
     val link by store.link.collectAsState()
     var refreshing by remember { mutableStateOf(false) }
     val collapsed = remember { mutableStateMapOf<String, Boolean>() }
-    val groups = remember(projects, sessions, query) { SessionList.group(projects, sessions.values.toList(), query) }
+    val groups = remember(projects, sessions) { SessionList.group(projects, sessions.values.toList()) }
     var now by remember { mutableStateOf(Instant.now()) }
     LaunchedEffect(Unit) { while (true) { delay(30_000); now = Instant.now() } }
 
@@ -145,10 +147,6 @@ private fun Sidebar(
             Icon(Icons.Outlined.Add, null, tint = p.onAccent)
             Text("New session", Modifier.padding(start = 8.dp), style = MaterialTheme.typography.labelLarge, color = p.onAccent)
         }
-        OutlinedTextField(
-            query, onQuery, Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-            placeholder = { Text("Search") }, leadingIcon = { Icon(Icons.Outlined.Search, null) }, singleLine = true,
-        )
         PullToRefreshBox(
             isRefreshing = refreshing,
             onRefresh = { refreshing = true; scope.launch { runCatching { store.refresh() }.onFailure { store.failed(it) }; refreshing = false } },
@@ -170,11 +168,23 @@ private fun Sidebar(
                             Text("${group.sessions.size}", style = MaterialTheme.typography.labelMedium, color = p.muted)
                         }
                     }
+                    if (!isCollapsed && store.can("pulls")) item(key = "pulls:$repo") {
+                        val selected = (pane as? Pane.Pulls)?.repo == repo || (pane as? Pane.Pull)?.repo == repo
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 1.dp)
+                                .background(if (selected) p.field else p.sidebar, RoundedCornerShape(8.dp))
+                                .clickable { onPane(Pane.Pulls(repo)) }.heightIn(min = 48.dp).padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(Icons.AutoMirrored.Outlined.MergeType, null, Modifier.size(18.dp), tint = p.muted)
+                            Text("Pull requests", Modifier.padding(start = 12.dp), style = MaterialTheme.typography.bodyMedium, color = p.ink)
+                        }
+                    }
                     if (!isCollapsed) items(group.sessions, key = { it.id }) { s ->
                         SessionRow(s, selected = (pane as? Pane.Open)?.sessionId == s.id, now = now) { onPane(Pane.Open(s.id)) }
                     }
                 }
-                if (groups.isEmpty()) item { Text(if (query.isBlank()) "No projects yet." else "Nothing matches.", Modifier.padding(24.dp), color = p.muted) }
+                if (groups.isEmpty()) item { Text("No projects yet.", Modifier.padding(24.dp), color = p.muted) }
             }
         }
     }

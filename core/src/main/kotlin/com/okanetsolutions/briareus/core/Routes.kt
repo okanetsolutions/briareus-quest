@@ -34,9 +34,11 @@ object Routes {
         // Pull requests
         ApiRoute("pulls", "GET", "pulls"),
         ApiRoute("pull", "GET", "pulls/{pr}"),
+        ApiRoute("pull_description", "GET", "pulls/{pr}/description"),
         ApiRoute("pull_files", "GET", "pulls/{pr}/files"),
         ApiRoute("findings", "GET", "pulls/{pr}/findings"),
         ApiRoute("merge_pull", "POST", "pulls/{pr}/merge"),
+        ApiRoute("serve_pull", "POST", "pulls/{pr}/serve"),
         // Issues. Their comments are on the timeline, 100 a `page`, oldest first.
         ApiRoute("issue", "GET", "issues/{issue}"),
         ApiRoute("issue_timeline", "GET", "issues/{issue}/timeline"),
@@ -45,7 +47,6 @@ object Routes {
         ApiRoute("start_session", "POST", "sessions"),
         ApiRoute("session", "GET", "sessions/{sessionId}"),
         ApiRoute("session_events", "GET", "sessions/{sessionId}/events"),
-        ApiRoute("rename", "PATCH", "sessions/{sessionId}"),
         ApiRoute("delete", "DELETE", "sessions/{sessionId}"),
         ApiRoute("message", "POST", "sessions/{sessionId}/messages"),
         ApiRoute("drop_message", "DELETE", "sessions/{sessionId}/queue/{index}"),

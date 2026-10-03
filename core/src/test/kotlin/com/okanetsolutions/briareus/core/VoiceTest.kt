@@ -92,8 +92,7 @@ class VoiceTest {
         assertEquals(VoicePlan.Show(ScreenAction.Conversation("s1", true)), plan(VoiceTool.SHOW_CONVERSATION, """{"session_id":"s1","own_panel":true}"""))
         assertEquals(VoicePlan.Show(ScreenAction.Preview("s1")), plan(VoiceTool.SHOW_PREVIEW, """{"session_id":"s1"}"""))
         assertEquals(VoicePlan.Show(ScreenAction.Issue("acme/api", 3)), plan(VoiceTool.SHOW_ISSUE, """{"issue":3,"project":"api"}"""))
-        assertEquals(VoicePlan.Show(ScreenAction.Search("billing")), plan(VoiceTool.SEARCH_CONVERSATIONS, """{"query":" billing "}"""))
-        assertEquals(VoicePlan.Show(ScreenAction.Search("")), plan(VoiceTool.SEARCH_CONVERSATIONS, """{"query":""}"""))
+        assertEquals(VoicePlan.Show(ScreenAction.PullRequests("acme/api")), plan(VoiceTool.SHOW_PULL_REQUESTS, """{"project":"api"}"""))
         assertEquals(VoicePlan.Show(ScreenAction.StatusPanel), plan(VoiceTool.SHOW_STATUS_PANEL, "{}"))
         assertEquals(VoicePlan.Show(ScreenAction.Home), plan(VoiceTool.GO_HOME, "{}"))
         assertEquals(VoicePlan.ReadScreen, plan(VoiceTool.READ_SCREEN, "{}"))
@@ -108,9 +107,17 @@ class VoiceTest {
 
     @Test fun thisPullRequestIsTheOneOnScreen() {
         val watching = context.copy(onScreen = login)
-        assertEquals(VoicePlan.Show(ScreenAction.PullRequest("acme/web", 42, "files")), plan(VoiceTool.SHOW_PULL_REQUEST, """{"view":"files"}""", watching))
-        assertEquals(VoicePlan.Show(ScreenAction.PullRequest("acme/web", 42, null)), plan(VoiceTool.SHOW_PULL_REQUEST, """{"view":"overview"}""", watching))
-        assertEquals(VoicePlan.Show(ScreenAction.PullRequest("acme/api", 9, null)), plan(VoiceTool.SHOW_PULL_REQUEST, """{"number":9,"project":"api"}""", watching))
+        // In the main window, unless its files (which the app does not list) or the browser are asked for.
+        assertEquals(VoicePlan.Show(ScreenAction.PullRequest("acme/web", 42, null, false)), plan(VoiceTool.SHOW_PULL_REQUEST, """{"view":"overview"}""", watching))
+        assertEquals(VoicePlan.Show(ScreenAction.PullRequest("acme/web", 42, "files", true)), plan(VoiceTool.SHOW_PULL_REQUEST, """{"view":"files"}""", watching))
+        assertEquals(VoicePlan.Show(ScreenAction.PullRequest("acme/web", 42, "checks", true)), plan(VoiceTool.SHOW_PULL_REQUEST, """{"view":"checks","in_browser":true}""", watching))
+        assertEquals(VoicePlan.Show(ScreenAction.PullRequest("acme/api", 9, null, false)), plan(VoiceTool.SHOW_PULL_REQUEST, """{"number":9,"project":"api"}""", watching))
+        // A pull request in the main window is "this" one; its project's list is where the list's project comes from.
+        val onPull = context.copy(pullOnScreen = "acme/api" to 7)
+        assertEquals(VoicePlan.Show(ScreenAction.PullRequest("acme/api", 7, null, true)), plan(VoiceTool.SHOW_PULL_REQUEST, """{"in_browser":true}""", onPull))
+        val onList = context.copy(pullOnScreen = "acme/api" to null)
+        assertTrue(plan(VoiceTool.SHOW_PULL_REQUEST, "{}", onList) is VoicePlan.Refuse)
+        assertEquals(VoicePlan.Show(ScreenAction.PullRequests("acme/api")), plan(VoiceTool.SHOW_PULL_REQUESTS, "{}", onList))
         assertTrue(plan(VoiceTool.SHOW_PULL_REQUEST, "{}") is VoicePlan.Refuse)
         // The new conversation form opens on the project on screen.
         assertEquals(VoicePlan.Show(ScreenAction.NewConversation("acme/web", null)), plan(VoiceTool.SHOW_NEW_CONVERSATION, "{}", watching))

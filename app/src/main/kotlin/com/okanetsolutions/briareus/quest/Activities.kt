@@ -65,11 +65,9 @@ class MainActivity : BriareusActivity() {
                 }
                 val navigator = app.navigator
                 val pane by navigator.pane.collectAsState()
-                val query by navigator.query.collectAsState()
                 val voicePhase by app.voice.phase.collectAsState()
                 HomeScreen(
                     store, pane, onPane = { navigator.pane.value = it },
-                    query = query, onQuery = { navigator.query.value = it },
                     onPopOut = { id -> Windows.openConversation(this, id); navigator.pane.value = null },
                     onStatusWindow = { Windows.openStatus(this) },
                     voiceOn = voicePhase != VoiceSession.Phase.OFF,

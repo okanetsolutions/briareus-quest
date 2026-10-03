@@ -22,7 +22,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -80,9 +79,9 @@ fun NewSessionScreen(store: Store, initialRepo: String?, initialPrompt: String? 
                 Text("This token has no projects yet.", color = p.muted)
                 return@Column
             }
-            OutlinedTextField(
-                prompt, { prompt = it }, Modifier.fillMaxWidth().heightIn(min = 160.dp),
-                placeholder = { Text("What should the agent do?") },
+            VoiceField(
+                store, prompt, { prompt = it }, Modifier.fillMaxWidth(), placeholder = "Record what the agent should do",
+                minHeight = 160.dp, maxHeight = 320.dp, enabled = !starting,
             )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Picker("Project", projects.firstOrNull { it.repo == repo }?.title ?: "—", projects.map { it.title to it.repo }) { picked = it }

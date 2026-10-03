@@ -126,7 +126,7 @@ private fun Intro(hasKey: Boolean, onSettings: () -> Unit) {
         Text("Talk to your agents", style = MaterialTheme.typography.titleLarge, color = p.ink)
         Text(
             "Ask what a conversation is doing, answer an agent, start one or stop one, and have the windows follow: " +
-                "“show me that pull request's files”, “open the login conversation beside this one”, “search for billing”. " +
+                "“show me this pull request”, “open the login conversation beside this one”, “show the website's pull requests”. " +
                 "Changes on the server are read back and wait for your yes.",
             style = MaterialTheme.typography.bodyMedium, color = p.muted,
         )
@@ -261,11 +261,11 @@ private val VoiceSession.Step.title: String
             VoiceTool.STOP_CONVERSATION -> if (waiting) "Asked to stop an agent" else "Stop an agent"
             VoiceTool.READ_SCREEN -> "Look at the screen"
             VoiceTool.SHOW_CONVERSATION -> "Show a conversation"
+            VoiceTool.SHOW_PULL_REQUESTS -> "Show the pull requests"
             VoiceTool.SHOW_PULL_REQUEST -> "Show pull request" + (n("number").takeIf { it.isNotEmpty() }?.let { " #$it" } ?: "")
             VoiceTool.SHOW_ISSUE -> "Show issue #${n("issue")}"
             VoiceTool.SHOW_PREVIEW -> "Show the running app"
             VoiceTool.SHOW_NEW_CONVERSATION -> "Show the new conversation form"
-            VoiceTool.SEARCH_CONVERSATIONS -> s("query").let { if (it.isBlank()) "Clear the search" else "Search for “$it”" }
             VoiceTool.SHOW_STATUS_PANEL -> "Show the status panel"
             VoiceTool.GO_HOME -> "Show the conversation list"
             null -> name

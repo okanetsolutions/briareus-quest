@@ -253,7 +253,7 @@ class VoiceSession(context: Context, private val store: Store, private val navig
         }
         fun fail(why: String) = finish(Step.State.Failed(why), args("error" to why))
         val tool = step.tool ?: return fail("There is no tool named ${step.name}.")
-        val context = VoiceContext(store.projects.value, store.sessions.value, navigator.onScreen())
+        val context = voiceContext()
         val key = Voice.readBackKey(tool, step.input)
         var plan = tool.plan(step.input, context)
         // A change goes through only on a yes the user said after hearing it read back; the model's word is not enough.
@@ -333,7 +333,7 @@ class VoiceSession(context: Context, private val store: Store, private val navig
         val place = when (plan) {
             is VoicePlan.Call -> plan.arguments
             // The unconfirmed plan only says what to read back; where the pull request is comes from a confirmed one.
-            else -> (step.tool!!.plan(JsonObject(step.input + ("confirmed" to JsonPrimitive(true))), VoiceContext(store.projects.value, store.sessions.value, navigator.onScreen())) as? VoicePlan.Call)?.arguments
+            else -> (step.tool!!.plan(JsonObject(step.input + ("confirmed" to JsonPrimitive(true))), voiceContext()) as? VoicePlan.Call)?.arguments
                 ?: return failed("The pull request could not be found.")
         }
         val repo = place.str("repo").orEmpty()
@@ -365,6 +365,8 @@ class VoiceSession(context: Context, private val store: Store, private val navig
             failed((e as? ApiError)?.description ?: e.message ?: "The call failed.")
         }
     }
+
+    private fun voiceContext() = VoiceContext(store.projects.value, store.sessions.value, navigator.onScreen(), navigator.pullOnScreen())
 
     private companion object {
         const val TIMEOUT = 60_000L

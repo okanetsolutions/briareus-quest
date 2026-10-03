@@ -45,11 +45,12 @@ object Voice {
 
         ## The screen
         You also drive the app's panels. When the user says "show", "open", "bring up", "go to" or "let me see", use the \
-        show_ tools: show_conversation puts a conversation in the main window (or in a panel of its own), show_pull_request \
-        and show_issue open the page in the browser beside it, show_preview opens a conversation's running app, \
-        show_new_conversation opens the form to start one (with a prompt filled in if the user dictated one), \
-        search_conversations filters the list, show_status_panel opens the status panel, and go_home leaves the main \
-        window on the list. These only show things; they need no confirmation. When the user says "this", "that", "it" or \
+        show_ tools: show_conversation puts a conversation in the main window (or in a panel of its own), \
+        show_pull_requests puts a project's open pull requests there, show_pull_request one pull request (its \
+        description, checks, reviews, findings and commits; its files and anything asked for in the browser open on \
+        GitHub beside the app), show_issue opens an issue in the browser, show_preview opens a conversation's running \
+        app, show_new_conversation opens the form to start one (with a prompt filled in if the user dictated one), \
+        show_status_panel opens the status panel, and go_home leaves the main window on the list. These only show things; they need no confirmation. When the user says "this", "that", "it" or \
         "here", call read_screen first to learn what is on screen: "this pull request" is the pull request of the \
         conversation on screen. After showing something, say in a few words what is now on screen.
 
@@ -357,10 +358,11 @@ class VoiceCost {
 sealed interface ScreenAction {
     data class Conversation(val sessionId: String, val ownPanel: Boolean) : ScreenAction
     data class NewConversation(val repo: String?, val prompt: String?) : ScreenAction
-    data class PullRequest(val repo: String, val number: Int, val view: String?) : ScreenAction
+    /** One pull request: in the main window, or its [view] on GitHub in the browser when [browser]. */
+    data class PullRequest(val repo: String, val number: Int, val view: String?, val browser: Boolean) : ScreenAction
+    data class PullRequests(val repo: String) : ScreenAction
     data class Issue(val repo: String, val number: Int) : ScreenAction
     data class Preview(val sessionId: String) : ScreenAction
-    data class Search(val query: String) : ScreenAction
     data object StatusPanel : ScreenAction
     data object Home : ScreenAction
 }
@@ -379,8 +381,13 @@ sealed interface VoicePlan {
     data object ReadScreen : VoicePlan
 }
 
-/** What a plan needs to know of the app: the projects, the conversations it knows, and the one in the main window. */
-data class VoiceContext(val projects: List<Project>, val sessions: Map<String, Session>, val onScreen: Session? = null)
+/**
+ * What a plan needs to know of the app: the projects, the conversations it knows, the conversation in the main window,
+ * and the pull requests there: their repository, and the number when it shows one rather than the project's list.
+ */
+data class VoiceContext(
+    val projects: List<Project>, val sessions: Map<String, Session>, val onScreen: Session? = null, val pullOnScreen: Pair<String, Int?>? = null,
+)
 
 /** What the model may call. Server tools run one client API call; screen tools change the windows; changes wait for a yes. */
 enum class VoiceTool(val wire: String) {
@@ -398,11 +405,11 @@ enum class VoiceTool(val wire: String) {
     STOP_CONVERSATION("stop_conversation"),
     READ_SCREEN("read_screen"),
     SHOW_CONVERSATION("show_conversation"),
+    SHOW_PULL_REQUESTS("show_pull_requests"),
     SHOW_PULL_REQUEST("show_pull_request"),
     SHOW_ISSUE("show_issue"),
     SHOW_PREVIEW("show_preview"),
     SHOW_NEW_CONVERSATION("show_new_conversation"),
-    SEARCH_CONVERSATIONS("search_conversations"),
     SHOW_STATUS_PANEL("show_status_panel"),
     GO_HOME("go_home");
 
@@ -477,26 +484,24 @@ enum class VoiceTool(val wire: String) {
                     "Sends a message to a conversation's agent, or answers its question. A busy agent gets it in its running turn or the next."
                 }
                 STOP_CONVERSATION -> { session(); confirmed(); "Stops the agent's running turn. The conversation stays open." }
-                READ_SCREEN -> "What the app's windows show right now: the conversation in the main window with its project and pull request, the conversations open in panels of their own, and the list's search."
+                READ_SCREEN -> "What the app's windows show right now: the conversation or pull request in the main window with its project, and the conversations open in panels of their own."
                 SHOW_CONVERSATION -> {
                     session()
                     add("own_panel", "boolean", "True to open it in a panel of its own beside the others instead of the main window.", false)
                     "Shows a conversation: its transcript, its question, its findings and its composer."
                 }
+                SHOW_PULL_REQUESTS -> { project(); "Shows a project's open pull requests in the main window, with their checks, labels and actions." }
                 SHOW_PULL_REQUEST -> {
-                    add("number", "integer", "The pull request's number, from a conversation's pull_request or list_pull_requests."); project()
-                    add("view", "string", "Which page to open. Omit for the overview.", false, listOf("overview", "files", "checks", "commits"))
-                    "Opens a pull request's page in the browser beside the app."
+                    add("number", "integer", "The pull request's number, from a conversation's pull_request or list_pull_requests. Omit for the pull request on screen.", false); project()
+                    add("view", "string", "What to show. files opens GitHub's files page in the browser, as the app does not list them. Omit for the overview.", false, listOf("overview", "files", "checks", "commits"))
+                    add("in_browser", "boolean", "True to open its page on GitHub in the browser beside the app instead of the main window.", false)
+                    "Shows one pull request in the main window: its status, description, checks, reviews, findings, linked issues and commits."
                 }
                 SHOW_ISSUE -> { add("issue", "integer", "The issue's number."); project(); "Opens an issue's page in the browser beside the app." }
                 SHOW_PREVIEW -> { session(); "Opens what a conversation's ▶ Run serves, its running app, in the browser." }
                 SHOW_NEW_CONVERSATION -> {
                     project(); add("prompt", "string", "A first message to fill in, as the user dictated it, for them to review and start.", false)
                     "Opens the form that starts a conversation, on a project, for the user to choose its runtime and start it themselves."
-                }
-                SEARCH_CONVERSATIONS -> {
-                    add("query", "string", "Words of a title, branch or project. An empty string clears the search.")
-                    "Filters the conversation list in the main window."
                 }
                 SHOW_STATUS_PANEL -> "Opens the status panel: what is waiting, working and ready, in a narrow window."
                 GO_HOME -> "Leaves the main window on the conversation list, with nothing open."
@@ -563,9 +568,17 @@ enum class VoiceTool(val wire: String) {
                 if (s.serveUrl == null) VoicePlan.Refuse("That conversation serves nothing right now; ▶ Run has to be started first.") else VoicePlan.Show(ScreenAction.Preview(s.id))
             }
             SHOW_PULL_REQUEST -> {
-                // "This pull request" is the one of the conversation on screen.
-                val n = number("number") ?: context.onScreen?.pullNumber ?: return VoicePlan.Refuse("number is missing, and the conversation on screen has no pull request.")
-                inRepo { VoicePlan.Show(ScreenAction.PullRequest(it, n, text("view")?.takeIf { v -> v != "overview" })) }
+                // "This pull request" is the one on screen, or the one of the conversation on screen.
+                val n = number("number") ?: context.pullOnScreen?.second ?: context.onScreen?.pullNumber
+                    ?: return VoicePlan.Refuse("number is missing, and nothing on screen has a pull request.")
+                val view = text("view")?.takeIf { v -> v != "overview" }
+                val browser = view == "files" || (input["in_browser"] as? JsonPrimitive)?.booleanOrNull == true
+                val pick = if (named == null && number("number") == null) context.pullOnScreen?.first else null
+                pick?.let { VoicePlan.Show(ScreenAction.PullRequest(it, n, view, browser)) } ?: inRepo { VoicePlan.Show(ScreenAction.PullRequest(it, n, view, browser)) }
+            }
+            SHOW_PULL_REQUESTS -> {
+                val repo = if (named == null) context.pullOnScreen?.first else null
+                repo?.let { VoicePlan.Show(ScreenAction.PullRequests(it)) } ?: inRepo { VoicePlan.Show(ScreenAction.PullRequests(it)) }
             }
             SHOW_ISSUE -> number("issue")?.let { n -> inRepo { VoicePlan.Show(ScreenAction.Issue(it, n)) } } ?: VoicePlan.Refuse("issue is missing.")
             SHOW_NEW_CONVERSATION -> {
@@ -573,7 +586,6 @@ enum class VoiceTool(val wire: String) {
                 if (named == null) VoicePlan.Show(ScreenAction.NewConversation(context.onScreen?.repo, prompt))
                 else inRepo { VoicePlan.Show(ScreenAction.NewConversation(it, prompt)) }
             }
-            SEARCH_CONVERSATIONS -> VoicePlan.Show(ScreenAction.Search(input.str("query")?.trim().orEmpty()))
             SHOW_STATUS_PANEL -> VoicePlan.Show(ScreenAction.StatusPanel)
             GO_HOME -> VoicePlan.Show(ScreenAction.Home)
         }
