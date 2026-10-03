@@ -20,10 +20,12 @@ class SessionListTest {
         assertEquals(emptyList<Session>(), groups[1].sessions)
     }
 
-    @Test fun searches() {
-        val sessions = listOf(s("1", "o/a", "2026-01-01T00:00:00Z"), s("22", "o/b", "2026-01-01T00:00:00Z"))
-        assertEquals(listOf("b" to listOf("22")), SessionList.group(projects, sessions, "feat/22").map { it.project.title to it.sessions.map(Session::id) })
-        assertEquals(listOf("Alpha" to listOf("1")), SessionList.group(projects, sessions, "alpha").map { it.project.title to it.sessions.map(Session::id) })
+    @Test fun runsOfAPullRequest() {
+        val sessions = listOf(
+            s("1", "o/a", "2026-01-01T00:00:00Z", ""","prStatus":{"number":7}"""), s("2", "o/a", "2026-02-01T00:00:00Z", ""","prStatus":{"number":7}"""),
+            s("3", "o/b", "2026-01-01T00:00:00Z", ""","prStatus":{"number":7}"""), s("4", "o/a", "2026-01-01T00:00:00Z"),
+        )
+        assertEquals(listOf("2", "1"), SessionList.forPull(sessions, "o/a", 7).map { it.id })
     }
 
     @Test fun countsAndAges() {

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -21,7 +22,7 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
-import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.automirrored.outlined.MergeType
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -30,7 +31,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -44,7 +44,6 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,10 +56,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.Instant
 
-/** What the right pane shows: the new session composer, or a conversation. Null is nothing chosen yet. */
+/** What the right pane shows: the new session composer, a conversation, or pull requests. Null is nothing chosen yet. */
 sealed interface Pane {
     data class New(val repo: String? = null) : Pane
     data class Open(val sessionId: String) : Pane
+    data class Pulls(val repo: String) : Pane
+    data class Pull(val repo: String, val number: Int) : Pane
 }
 
 /**
@@ -100,6 +101,8 @@ private fun Detail(store: Store, pane: Pane, onPane: (Pane?) -> Unit, onPopOut: 
             NewSessionScreen(store, pane.repo) { onPane(Pane.Open(it)) }
         }
         is Pane.Open -> ConversationScreen(store, pane.sessionId, onBack = back, onPopOut = { onPopOut(pane.sessionId) }, onDeleted = { onPane(null) })
+        is Pane.Pulls -> PullsScreen(store, pane.repo, onPane, back)
+        is Pane.Pull -> PullScreen(store, pane.repo, pane.number, onPane)
     }
 }
 
@@ -113,10 +116,9 @@ private fun Sidebar(
     val projects by store.projects.collectAsState()
     val sessions by store.sessions.collectAsState()
     val link by store.link.collectAsState()
-    var query by rememberSaveable { mutableStateOf("") }
     var refreshing by remember { mutableStateOf(false) }
     val collapsed = remember { mutableStateMapOf<String, Boolean>() }
-    val groups = remember(projects, sessions, query) { SessionList.group(projects, sessions.values.toList(), query) }
+    val groups = remember(projects, sessions) { SessionList.group(projects, sessions.values.toList()) }
     var now by remember { mutableStateOf(Instant.now()) }
     LaunchedEffect(Unit) { while (true) { delay(30_000); now = Instant.now() } }
 
@@ -135,10 +137,6 @@ private fun Sidebar(
             Icon(Icons.Outlined.Add, null, tint = p.onAccent)
             Text("New session", Modifier.padding(start = 8.dp), style = MaterialTheme.typography.labelLarge, color = p.onAccent)
         }
-        OutlinedTextField(
-            query, { query = it }, Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-            placeholder = { Text("Search") }, leadingIcon = { Icon(Icons.Outlined.Search, null) }, singleLine = true,
-        )
         PullToRefreshBox(
             isRefreshing = refreshing,
             onRefresh = { refreshing = true; scope.launch { runCatching { store.refresh() }.onFailure { store.failed(it) }; refreshing = false } },
@@ -163,11 +161,23 @@ private fun Sidebar(
                             Text("${group.sessions.size}", style = MaterialTheme.typography.labelMedium, color = p.muted)
                         }
                     }
+                    if (!isCollapsed && store.can("pulls")) item(key = "pulls:$repo") {
+                        val selected = (pane as? Pane.Pulls)?.repo == repo || (pane as? Pane.Pull)?.repo == repo
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 1.dp)
+                                .background(if (selected) p.field else p.sidebar, RoundedCornerShape(8.dp))
+                                .clickable { onPane(Pane.Pulls(repo)) }.heightIn(min = 48.dp).padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(Icons.AutoMirrored.Outlined.MergeType, null, Modifier.size(18.dp), tint = p.muted)
+                            Text("Pull requests", Modifier.padding(start = 12.dp), style = MaterialTheme.typography.bodyMedium, color = p.ink)
+                        }
+                    }
                     if (!isCollapsed) items(group.sessions, key = { it.id }) { s ->
                         SessionRow(s, selected = (pane as? Pane.Open)?.sessionId == s.id, now = now) { onPane(Pane.Open(s.id)) }
                     }
                 }
-                if (groups.isEmpty()) item { Text(if (query.isBlank()) "No projects yet." else "Nothing matches.", Modifier.padding(24.dp), color = p.muted) }
+                if (groups.isEmpty()) item { Text("No projects yet.", Modifier.padding(24.dp), color = p.muted) }
             }
         }
     }
