@@ -6,4 +6,32 @@
       <certificates src="system" />
     </trust-anchors>
   </base-config>
+
+  <!--
+    OpenAI's Realtime API, the voice panel's one destination besides the paired server. Its host is fixed, so it is
+    pinned; the paired server's is the user's and cannot be. Cloudflare serves it and may issue from Google Trust
+    Services, Let's Encrypt or SSL.com, so the pins are those CAs' root keys (SHA-256 of the SubjectPublicKeyInfo), not
+    OpenAI's own certificate, which renews every few months. The expiry turns pinning off in a build too old to know a
+    new root, rather than leave its voice unable to connect; renew the date with the pins.
+  -->
+  <domain-config cleartextTrafficPermitted="false">
+    <domain includeSubdomains="false">api.openai.com</domain>
+    <trust-anchors>
+      <certificates src="system" />
+    </trust-anchors>
+    <pin-set expiration="2027-10-01">
+      <!-- Google Trust Services: GTS Root R1, R3, R4 -->
+      <pin digest="SHA-256">hxqRlPTu1bMS/0DITB1SSu0vd4u/8l8TjPgfaAp63Gc=</pin>
+      <pin digest="SHA-256">QXnt2YHvdHR3tJYmQIr0Paosp6t/nggsEGD4QJZ3Q0g=</pin>
+      <pin digest="SHA-256">mEflZT5enoR1FuXLgYYGqnVEoZvmf9c2bVBpiOjYQ0c=</pin>
+      <!-- Let's Encrypt: ISRG Root X1, X2 -->
+      <pin digest="SHA-256">C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=</pin>
+      <pin digest="SHA-256">diGVwiVYbubAI3RW4hB9xU8e/CH2GnkuvVFZE8zmgzI=</pin>
+      <!-- SSL.com: Root Certification Authority ECC and RSA, TLS ECC and RSA Root CA 2022 -->
+      <pin digest="SHA-256">oyD01TTXvpfBro3QSZc1vIlcMjrdLTiL/M9mLCPX+Zo=</pin>
+      <pin digest="SHA-256">0cRTd+vc1hjNFlHcLgLCHXUeWqn80bNDH/bs9qMTSPo=</pin>
+      <pin digest="SHA-256">G/ANXI8TwJTdF+AFBM8IiIUPEv0Gf6H5LA/b9guG4yE=</pin>
+      <pin digest="SHA-256">K89VOmb1cJAN3TK6bf4ezAbJGC1mLcG2Dh97dnwr3VQ=</pin>
+    </pin-set>
+  </domain-config>
 </network-security-config>

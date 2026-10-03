@@ -77,7 +77,7 @@ Behind Cloudflare Access, the server's `/api/v1` and `/api/v1/*` paths need the 
 - No shared secret is built into the app. The token is sealed with AES-256-GCM under a key generated inside the Android Keystore that never leaves the headset, and is sent only to the server it was paired with.
 - Saved responses are sealed with the same key in the app's no-backup directory and erased when the connection is forgotten, revoked or replaced; entries untouched for 30 days are dropped. Nothing is included in backups or device transfers.
 - Voice notes are sent to your server for transcription and nowhere else.
-- The voice panel is the exception: while a voice conversation is on, the microphone's audio goes to OpenAI (`api.openai.com`) under your own API key, with the answers of the tools it calls (titles, messages, pull requests and issues of your projects). The key is sealed in the vault with the token, sent only to OpenAI, and erased when the connection is forgotten. Nothing reaches OpenAI until you start a conversation.
+- The voice panel is the exception: while a voice conversation is on, the microphone's audio goes to OpenAI (`api.openai.com`) under your own API key, with the answers of the tools it calls (titles, messages, pull requests and issues of your projects). The key is sealed in the vault with the token, sent only to OpenAI, and erased when the connection is forgotten. The connection to `api.openai.com` is pinned to the root keys of the CAs its CDN issues from. Nothing reaches OpenAI until you start a conversation.
 - No analytics or telemetry.
 
 ## Contributing and license
