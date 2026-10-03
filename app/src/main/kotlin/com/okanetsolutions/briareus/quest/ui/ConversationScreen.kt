@@ -381,7 +381,10 @@ private fun TriageCard(store: Store, session: Session, triage: Triage) {
         val fixes = triage.fixes(chosen)
         AlertDialog(
             onDismissRequest = { confirm = false },
-            title = { Text(if (!triage.mine) "Take this review off the queue?" else if (fixes == 0) "Complete with nothing to fix?" else "Start a paid fix session for $fixes finding${if (fixes == 1) "" else "s"}?") },
+            title = {
+                val plural = if (fixes == 1) "" else "s"
+                Text(if (!triage.mine) "Take this review off the queue?" else if (fixes == 0) "Complete with nothing to fix?" else "Start a paid fix session for $fixes finding$plural?")
+            },
             confirmButton = {
                 TextButton(onClick = {
                     confirm = false

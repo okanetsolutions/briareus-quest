@@ -28,6 +28,7 @@ object Markdown {
 
     fun parse(text: String): List<Block> = parseLines(text.replace("\r\n", "\n").split('\n'))
 
+    @Suppress("CyclomaticComplexMethod") // A hand-written parser: one branch per block kind, in precedence order.
     private fun parseLines(lines: List<String>): List<Block> {
         val blocks = ArrayList<Block>()
         var i = 0
@@ -85,6 +86,7 @@ object Markdown {
     }
 
     /** Reads one list starting at [start] into [out]; returns the index after it. Deeper-indented lines nest. */
+    @Suppress("CyclomaticComplexMethod")
     private fun parseList(lines: List<String>, start: Int, out: MutableList<Block>): Int {
         val first = BULLET.find(lines[start]) ?: ORDERED.find(lines[start])!!
         val ordered = first.groupValues[2].first().isDigit()
@@ -162,6 +164,7 @@ object Inline {
         return merge(out)
     }
 
+    @Suppress("CyclomaticComplexMethod", "LongMethod", "NestedBlockDepth") // One branch per inline marker.
     private fun parseInto(text: String, style: Span, out: MutableList<Span>) {
         val plain = StringBuilder()
         fun flush() { if (plain.isNotEmpty()) out += style.copy(text = plain.toString()); plain.setLength(0) }

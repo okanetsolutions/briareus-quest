@@ -154,7 +154,10 @@ private fun Sidebar(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Icon(if (isCollapsed) Icons.Outlined.ExpandMore else Icons.Outlined.ExpandLess, null, tint = p.muted)
-                            Text(group.project.title, Modifier.weight(1f).padding(start = 6.dp), style = MaterialTheme.typography.titleSmall, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                group.project.title, Modifier.weight(1f).padding(start = 6.dp), style = MaterialTheme.typography.titleSmall,
+                                color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            )
                             if (group.working) Dot(p.warn, Modifier.padding(end = 8.dp))
                             if (group.needsYou > 0) Text("${group.needsYou}", Modifier.padding(end = 8.dp), style = MaterialTheme.typography.labelMedium, color = p.accent)
                             Text("${group.sessions.size}", style = MaterialTheme.typography.labelMedium, color = p.muted)
