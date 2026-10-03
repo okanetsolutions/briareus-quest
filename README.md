@@ -1,6 +1,6 @@
 # Briareus for Quest
 
-[![CI](https://github.com/okanetsolutions/briareus-quest/actions/workflows/ci.yml/badge.svg)](https://github.com/okanetsolutions/briareus-quest/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/okanetsolutions/briareus-quest)](https://github.com/okanetsolutions/briareus-quest/releases/latest) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/okanetsolutions/briareus-quest/actions/workflows/ci.yml/badge.svg)](https://github.com/okanetsolutions/briareus-quest/actions/workflows/ci.yml) [![CodeQL](https://github.com/okanetsolutions/briareus-quest/actions/workflows/codeql.yml/badge.svg)](https://github.com/okanetsolutions/briareus-quest/actions/workflows/codeql.yml) [![Release](https://img.shields.io/github/v/release/okanetsolutions/briareus-quest)](https://github.com/okanetsolutions/briareus-quest/releases/latest) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 A Meta Quest client for [Briareus](https://github.com/nadinyamaui/briareus), the dashboard for running coding agents against your projects. It runs as ordinary 2D panels in Horizon OS, so Briareus sits beside YouTube, WhatsApp or the browser instead of taking over the headset, and it tells you when a session needs you. Written in Kotlin with Jetpack Compose. It talks to the server's client API (`/api/v1`) with a per-device token and works with any Briareus server you can reach over HTTPS. Requires a Quest 2, 3, 3S or Pro (Horizon OS on Android 12L or later).
 
@@ -51,7 +51,7 @@ builds `app/build/outputs/apk/debug/app-debug.apk`; `./gradlew installDebug` ins
 ./gradlew check -Pwerror
 ```
 
-The core (address and token rules, the API client, route catalog and permissions, models, transcript, event streams, notification rules, Markdown and findings) has no Android code and is exercised by `core/src/test`: origin validation, credential headers, the route and arguments of every call, the route catalog and its permissions, redirect rejection, non-JSON responses, rate limiting, oversized requests, uploads and transcription, event stream parsing and resumption, transcript ordering and deduplication, session states, which changes notify and which stay quiet, runtime selection, Markdown blocks and inline styles, and findings verdicts. HTTP is stubbed through an OkHttp interceptor. The app is linted with warnings as errors.
+detekt runs on both modules, and the core (address and token rules, the API client, route catalog and permissions, models, transcript, event streams, notification rules, Markdown and findings) has no Android code and is exercised by `core/src/test`: origin validation, credential headers, the route and arguments of every call, the route catalog and its permissions, redirect rejection, non-JSON responses, rate limiting, oversized requests, uploads and transcription, event stream parsing and resumption, transcript ordering and deduplication, session states, which changes notify and which stay quiet, runtime selection, Markdown blocks and inline styles, and findings verdicts. HTTP is stubbed through an OkHttp interceptor. The app is linted with warnings as errors. CodeQL, the dependency review and actionlint run in CI as well.
 
 ## Project layout
 

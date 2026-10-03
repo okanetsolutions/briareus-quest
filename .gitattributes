@@ -1,0 +1,7 @@
+# Text is LF in the repository and in every checkout, so editorconfig-checker sees the same bytes on Windows and Linux.
+* text=auto eol=lf
+*.bat -text
+gradlew text eol=lf
+*.jar binary
+*.png binary
+*.jks binary

@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./gradlew *)",
+      "Bash(adb devices*)",
+      "Bash(adb logcat*)",
+      "Bash(adb shell dumpsys*)",
+      "Bash(adb exec-out screencap*)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git branch*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "if": "Bash(git push*)",
+            "command": "python3 -c \"import json;print(json.dumps({'hookSpecificOutput':{'hookEventName':'PreToolUse','additionalContext':'About to push. Every push to main publishes a release, so confirm the branch, and run ./gradlew check -Pwerror first if it has not run since the last change.'}}))\"",
+            "statusMessage": "Reminding to run the checks before pushing"
+          }
+        ]
+      }
+    ]
+  }
+}

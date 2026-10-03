@@ -28,12 +28,14 @@ android.aapt2FromMavenOverride=/path/to/aapt2
 ./gradlew check -Pwerror
 ```
 
-runs the core tests and the app's lint. Everything under `core/` (address and token rules, the `/api/v1` client, route catalog, models, transcript, event streams, notification rules, Markdown, findings) has no Android code and is covered by `core/src/test`, with HTTP stubbed through an OkHttp interceptor. New core behaviour needs a test there. UI changes in `app/` are checked by running the app on a headset against a Briareus server; a screenshot in the pull request helps.
+runs the core tests, detekt on both modules and the app's lint. Everything under `core/` (address and token rules, the `/api/v1` client, route catalog, models, transcript, event streams, notification rules, Markdown, findings) has no Android code and is covered by `core/src/test`, with HTTP stubbed through an OkHttp interceptor. New core behaviour needs a test there. UI changes in `app/` are checked by running the app on a headset against a Briareus server; a screenshot in the pull request helps.
 
 The same checks run in CI for every pull request, and every one must pass:
 
 - **Warnings are errors.** `-Pwerror` makes Kotlin warnings errors, and lint fails on any warning.
-- **Formatting.** Files follow `.editorconfig` (LF, final newline, no trailing spaces), checked by editorconfig-checker.
+- **Static analysis.** detekt runs on both modules with `config/detekt/detekt.yml`, which only relaxes what this codebase does on purpose (wide lines, Compose naming); a finding in deliberately complex code is suppressed at the function with a reason, not by loosening the configuration.
+- **Formatting.** Files follow `.editorconfig` (LF, final newline, no trailing spaces), checked by editorconfig-checker. `.gitattributes` keeps text LF in every checkout, Windows included.
+- **Workflows and dependencies.** actionlint checks `.github/workflows`; CodeQL analyses the Kotlin; a pull request that adds a dependency with a known high-severity vulnerability is refused by the dependency review.
 
 ## Layout
 
@@ -41,6 +43,8 @@ The same checks run in CI for every pull request, and every one must pass:
 | --- | --- |
 | `core/` | Portable logic, no Android: the API client, models, notification rules, Markdown. |
 | `app/` | The Android app: the encrypted vault and cache, the store, the events service and notifications, voice notes, and the Compose screens under `ui/`. |
+
+[AGENTS.md](AGENTS.md) describes the architecture and the rules a change must respect in more detail, for people and for coding agents alike; `.claude/skills/` holds topic guides (conventions, testing, adding a server call, running on a headset, releases) that Claude Code loads on demand and that read fine on their own.
 
 ## Style
 
