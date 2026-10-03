@@ -193,7 +193,8 @@ private fun PullCard(store: Store, repo: String, pr: PullRow, errands: List<Erra
     ) {
         Row(verticalAlignment = Alignment.Top) {
             Text(pr.title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = p.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(SessionList.age(pr.updatedAt, now).let { if (it.isEmpty() || it == "now") it else "$it ago" }, Modifier.padding(start = 12.dp), style = MaterialTheme.typography.labelSmall, color = p.muted)
+            val age = SessionList.age(pr.updatedAt, now).let { if (it.isEmpty() || it == "now") it else "$it ago" }
+            Text(age, Modifier.padding(start = 12.dp), style = MaterialTheme.typography.labelSmall, color = p.muted)
         }
         PullMeta(pr)
         if (pr.labels.isNotEmpty() || pr.draft || pr.conflicting) {
@@ -454,7 +455,10 @@ fun PullScreen(store: Store, repo: String, number: Int, onPane: (Pane?) -> Unit)
                 Section("Checks" + (o.checksSummary?.let { " · $it" } ?: "")) {
                     if (o.checks.isEmpty()) Text("No checks reported.", color = p.muted)
                     o.checks.forEach { c ->
-                        Row(Modifier.fillMaxWidth().clickable(enabled = c.url != null) { c.url?.let { openBeside(context, it) } }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            Modifier.fillMaxWidth().clickable(enabled = c.url != null) { c.url?.let { openBeside(context, it) } }.padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             Dot(if (c.failed) p.danger else if (c.passed) p.ok else if (c.pending) p.warn else p.muted)
                             Text(c.name, Modifier.weight(1f).padding(start = 10.dp), style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(c.label, style = MaterialTheme.typography.labelMedium, color = p.muted)
