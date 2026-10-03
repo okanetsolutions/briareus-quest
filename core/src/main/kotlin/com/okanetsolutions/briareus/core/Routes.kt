@@ -34,8 +34,12 @@ object Routes {
         // Pull requests
         ApiRoute("pulls", "GET", "pulls"),
         ApiRoute("pull", "GET", "pulls/{pr}"),
+        ApiRoute("pull_files", "GET", "pulls/{pr}/files"),
         ApiRoute("findings", "GET", "pulls/{pr}/findings"),
         ApiRoute("merge_pull", "POST", "pulls/{pr}/merge"),
+        // Issues. Their comments are on the timeline, 100 a `page`, oldest first.
+        ApiRoute("issue", "GET", "issues/{issue}"),
+        ApiRoute("issue_timeline", "GET", "issues/{issue}/timeline"),
         // Sessions. The list has no project parameter: a `repo` argument cuts the answer down here instead.
         ApiRoute("sessions", "GET", "sessions", filter = "repo", list = "sessions"),
         ApiRoute("start_session", "POST", "sessions"),

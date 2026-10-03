@@ -6,6 +6,9 @@
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+  <!-- The voice conversation runs the microphone and speaker as a call, for the echo canceller. -->
+  <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
   <!-- A 2D panel app: no VR mode, no controllers or hand tracking required beyond the system pointer. -->
   <uses-feature android:name="android.hardware.microphone" android:required="false" />
@@ -61,6 +64,23 @@
       android:taskAffinity="com.okanetsolutions.briareus.quest.status">
       <layout android:defaultWidth="400dp" android:defaultHeight="640dp" android:minWidth="320dp" android:minHeight="360dp" />
     </activity>
+
+    <!-- The voice panel: talk to GPT-Realtime about your projects, and have the other windows follow. -->
+    <activity
+      android:name=".VoiceActivity"
+      android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation"
+      android:exported="false"
+      android:launchMode="singleTask"
+      android:resizeableActivity="true"
+      android:taskAffinity="com.okanetsolutions.briareus.quest.voice">
+      <layout android:defaultWidth="460dp" android:defaultHeight="720dp" android:minWidth="340dp" android:minHeight="420dp" />
+    </activity>
+
+    <!-- Keeps the microphone open while a voice conversation goes on and you look at another app. -->
+    <service
+      android:name=".VoiceService"
+      android:exported="false"
+      android:foregroundServiceType="microphone" />
 
     <!-- Keeps GET /events open while you are in other apps, and notifies when a session needs you. -->
     <service

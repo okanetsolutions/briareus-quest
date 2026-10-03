@@ -21,6 +21,7 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
@@ -44,7 +45,6 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,7 +59,7 @@ import java.time.Instant
 
 /** What the right pane shows: the new session composer, or a conversation. Null is nothing chosen yet. */
 sealed interface Pane {
-    data class New(val repo: String? = null) : Pane
+    data class New(val repo: String? = null, val prompt: String? = null) : Pane
     data class Open(val sessionId: String) : Pane
 }
 
@@ -72,20 +72,25 @@ fun HomeScreen(
     store: Store,
     pane: Pane?,
     onPane: (Pane?) -> Unit,
+    query: String,
+    onQuery: (String) -> Unit,
     onPopOut: (String) -> Unit,
     onStatusWindow: () -> Unit,
+    voiceOn: Boolean,
+    onVoiceWindow: () -> Unit,
     onBackgroundAlerts: (Boolean) -> Unit,
 ) {
+    val header = SidebarHeader(onStatusWindow, voiceOn, onVoiceWindow, onBackgroundAlerts)
     val p = LocalPalette.current
     BoxWithConstraints(Modifier.fillMaxSize().background(p.canvas)) {
         if (maxWidth >= 900.dp) {
             Row(Modifier.fillMaxSize()) {
-                Sidebar(store, pane, onPane, onStatusWindow, onBackgroundAlerts, Modifier.width(320.dp).fillMaxHeight())
+                Sidebar(store, pane, onPane, query, onQuery, header, Modifier.width(320.dp).fillMaxHeight())
                 VerticalDivider(color = p.line)
                 Box(Modifier.weight(1f).fillMaxHeight()) { Detail(store, pane ?: Pane.New(), onPane, onPopOut, back = null) }
             }
         } else if (pane == null) {
-            Sidebar(store, null, onPane, onStatusWindow, onBackgroundAlerts, Modifier.fillMaxSize())
+            Sidebar(store, null, onPane, query, onQuery, header, Modifier.fillMaxSize())
         } else {
             Detail(store, pane, onPane, onPopOut, back = { onPane(null) })
         }
@@ -97,23 +102,25 @@ private fun Detail(store: Store, pane: Pane, onPane: (Pane?) -> Unit, onPopOut: 
     when (pane) {
         is Pane.New -> Column {
             if (back != null) TextButton(onClick = back, modifier = Modifier.padding(8.dp)) { Text("← Conversations") }
-            NewSessionScreen(store, pane.repo) { onPane(Pane.Open(it)) }
+            NewSessionScreen(store, pane.repo, pane.prompt) { onPane(Pane.Open(it)) }
         }
         is Pane.Open -> ConversationScreen(store, pane.sessionId, onBack = back, onPopOut = { onPopOut(pane.sessionId) }, onDeleted = { onPane(null) })
     }
 }
 
+/** What the sidebar's header opens: the status panel, the voice panel and the settings. */
+private class SidebarHeader(val onStatusWindow: () -> Unit, val voiceOn: Boolean, val onVoiceWindow: () -> Unit, val onBackgroundAlerts: (Boolean) -> Unit)
+
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun Sidebar(
-    store: Store, pane: Pane?, onPane: (Pane?) -> Unit, onStatusWindow: () -> Unit, onBackgroundAlerts: (Boolean) -> Unit, modifier: Modifier,
+    store: Store, pane: Pane?, onPane: (Pane?) -> Unit, query: String, onQuery: (String) -> Unit, header: SidebarHeader, modifier: Modifier,
 ) {
     val p = LocalPalette.current
     val scope = rememberCoroutineScope()
     val projects by store.projects.collectAsState()
     val sessions by store.sessions.collectAsState()
     val link by store.link.collectAsState()
-    var query by rememberSaveable { mutableStateOf("") }
     var refreshing by remember { mutableStateOf(false) }
     val collapsed = remember { mutableStateMapOf<String, Boolean>() }
     val groups = remember(projects, sessions, query) { SessionList.group(projects, sessions.values.toList(), query) }
@@ -124,8 +131,11 @@ private fun Sidebar(
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Briareus", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = p.ink)
             LinkIndicator(link)
-            IconButton(onClick = onStatusWindow) { Icon(Icons.Outlined.Dashboard, "Open the status panel", tint = p.muted) }
-            SettingsMenu(store, onBackgroundAlerts)
+            IconButton(onClick = header.onVoiceWindow) {
+                Icon(Icons.Outlined.GraphicEq, if (header.voiceOn) "Voice conversation on" else "Talk to Briareus", tint = if (header.voiceOn) p.accent else p.muted)
+            }
+            IconButton(onClick = header.onStatusWindow) { Icon(Icons.Outlined.Dashboard, "Open the status panel", tint = p.muted) }
+            SettingsMenu(store, header.onBackgroundAlerts)
         }
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).background(p.accent, RoundedCornerShape(10.dp))
@@ -136,7 +146,7 @@ private fun Sidebar(
             Text("New session", Modifier.padding(start = 8.dp), style = MaterialTheme.typography.labelLarge, color = p.onAccent)
         }
         OutlinedTextField(
-            query, { query = it }, Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+            query, onQuery, Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
             placeholder = { Text("Search") }, leadingIcon = { Icon(Icons.Outlined.Search, null) }, singleLine = true,
         )
         PullToRefreshBox(
