@@ -86,6 +86,22 @@ class ApiClientTest {
         assertEquals("https://b.example/api/v1/pulls/7/files?repo=acme%2Fapi&page=2&headSha=h1&baseSha=b1", server.requests[1].url.toString())
     }
 
+    @Test fun aSlowStartWaitsLongerAndATimeoutSaysTheServerMayStillBeWorking() = runTest {
+        var timeouts = listOf<Long>()
+        val slow = ApiClient(
+            ServerAddress.parse("https://b.example")!!, token,
+            ApiClient.defaultHttpClient().newBuilder().addInterceptor { chain ->
+                timeouts = timeouts + chain.call().timeout().timeoutNanos() / 1_000_000
+                throw java.net.SocketTimeoutException("timeout")
+            }.build(),
+        )
+        val e = expectError { slow.call("serve_pull", args("repo" to "acme/api", "pr" to 7)) }
+        assertEquals(ApiError.Kind.NETWORK, e.kind)
+        assertTrue(e.description, e.description.startsWith("The server took too long to answer."))
+        expectError { slow.call("pulls", args("repo" to "acme/api")) }
+        assertEquals(listOf(180_000L, 30_000L), timeouts)
+    }
+
     @Test fun writesSendJsonBodies() = runTest {
         server.reply(body = """{"session":{"id":"s"}}""")
         client.call("message", args("sessionId" to "s", "text" to "hi", "attachments" to listOf("u1")))

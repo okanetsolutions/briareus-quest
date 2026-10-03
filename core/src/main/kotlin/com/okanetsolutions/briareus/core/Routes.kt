@@ -8,7 +8,8 @@ import kotlinx.serialization.json.JsonPrimitive
  * One of the calls this app makes, and the route that answers it. A `{name}` in [path] is filled with the argument of that
  * name, URL-encoded; the other arguments go in the query of a GET or DELETE and in the JSON body otherwise. [set] names a
  * body flag the call always sends as true. [filter] names an argument the route has no parameter for: it is kept back,
- * and the answer's [list] is cut to the rows whose field of that name equals it.
+ * and the answer's [list] is cut to the rows whose field of that name equals it. [timeoutMs] is for a call that answers
+ * only once slow work is done, such as preparing a workspace.
  */
 data class ApiRoute(
     val name: String,
@@ -17,6 +18,7 @@ data class ApiRoute(
     val set: String? = null,
     val filter: String? = null,
     val list: String? = null,
+    val timeoutMs: Long? = null,
 )
 
 object Routes {
@@ -38,7 +40,8 @@ object Routes {
         ApiRoute("pull_files", "GET", "pulls/{pr}/files"),
         ApiRoute("findings", "GET", "pulls/{pr}/findings"),
         ApiRoute("merge_pull", "POST", "pulls/{pr}/merge"),
-        ApiRoute("serve_pull", "POST", "pulls/{pr}/serve"),
+        // Answers once the pull request's workspace is prepared and its run commands started.
+        ApiRoute("serve_pull", "POST", "pulls/{pr}/serve", timeoutMs = 180_000L),
         // Issues. Their comments are on the timeline, 100 a `page`, oldest first.
         ApiRoute("issue", "GET", "issues/{issue}"),
         ApiRoute("issue_timeline", "GET", "issues/{issue}/timeline"),

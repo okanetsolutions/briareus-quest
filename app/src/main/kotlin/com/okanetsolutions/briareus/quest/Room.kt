@@ -32,6 +32,9 @@ class Room(private val anchor: Pose) {
         return Pose(position, Quaternion.lookRotationAroundY(position - anchor.t))
     }
 
+    /** Which way [direction] points, in degrees around the user from where the space was placed. */
+    fun yaw(direction: Vector3): Double = Math.toDegrees(atan2(direction.dot(right).toDouble(), direction.dot(forward).toDouble()))
+
     /** [at] moved to where [position] is, keeping its size. */
     fun placement(position: Vector3, at: Placement): Placement {
         val offset = position - anchor.t

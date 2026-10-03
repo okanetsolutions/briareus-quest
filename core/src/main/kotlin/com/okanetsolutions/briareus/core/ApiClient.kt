@@ -24,6 +24,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.TlsVersion
 import java.io.IOException
+import java.io.InterruptedIOException
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -61,15 +62,16 @@ class ApiClient(
         val route = Routes[name] ?: throw ApiError(ApiError.Kind.HTTP, 400, "Unknown call")
         val rest = arguments.toMutableMap()
         val path = fillPath(route, rest)
+        val wait = timeoutMs ?: route.timeoutMs
         val kept = route.filter?.let { (rest.remove(it) as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }
         val reads = route.method == "GET" || route.method == "DELETE"
         val result = if (reads) {
-            request(route.method, url(path, JsonObject(rest)), null, timeoutMs)
+            request(route.method, url(path, JsonObject(rest)), null, wait)
         } else {
             route.set?.let { rest[it] = JsonPrimitive(true) }
             val body = BriareusJson.encodeToString(JsonObject.serializer(), JsonObject(rest))
             if (body.toByteArray().size > MAX_REQUEST_BYTES) throw ApiError(ApiError.Kind.OVERSIZED_REQUEST)
-            request(route.method, url(path), body.toRequestBody(JSON), timeoutMs)
+            request(route.method, url(path), body.toRequestBody(JSON), wait)
         }
         val filter = route.filter ?: return result
         val list = route.list ?: return result
@@ -245,6 +247,8 @@ internal suspend fun Call.await(): Response = suspendCancellableCoroutine { cont
             if (continuation.isCancelled) return
             continuation.resumeWithException(
                 if (call.isCanceled()) ApiError(ApiError.Kind.CANCELLED)
+                // A write that timed out may still be carried out by the server, so the user is told to look before trying again.
+                else if (e is InterruptedIOException) ApiError(ApiError.Kind.NETWORK, message = "The server took too long to answer. It may still be working on it: refresh before trying again.")
                 else ApiError(ApiError.Kind.NETWORK, message = e.message?.let { "The server could not be reached: $it" } ?: "The server could not be reached."),
             )
         }

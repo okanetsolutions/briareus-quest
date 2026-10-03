@@ -98,6 +98,30 @@ class SpaceTest {
         assertEquals(100.0, l.at(preview).yaw, 0.0)
     }
 
+    @Test fun theFrontIsWhereTheUserFacesNow() {
+        // Turned 100 degrees to the right: a new screen opens there, and what was there steps aside.
+        val turned = withStatus.facing(100.0)
+        val l = turned.show(pull)
+        assertEquals(pull, l.front)
+        assertEquals(100.0, l.at(pull).yaw, 0.0)
+        // Bringing the main window forward takes it to where the user looks, and the pull request to where it was.
+        val back = l.move("main", SpaceMove.FRONT)!!
+        assertEquals(SpacePanel.Main, back.front)
+        assertEquals(100.0, back.at(SpacePanel.Main).yaw, 0.0)
+        assertEquals(0.0, back.at(pull).yaw, 0.0)
+        // Places are said from where the user faces.
+        assertEquals("far to the left", back.describe { it.key }.first { it["panel"] == pull.key }["where"])
+        // A small turn keeps the same layout.
+        assertTrue(turned.facing(105.0) === turned)
+    }
+
+    @Test fun draggingTheTitleBarTurnsThePanelAroundTheUser() {
+        val at = Placement(0.0, 2.0)
+        assertEquals(45.0, at.dragged(2.0, 0.0).yaw, 1e-9)
+        assertEquals(-0.5, at.dragged(0.0, 0.5).height, 1e-9)
+        assertEquals(-SpaceLayout.MAX_HEIGHT, at.dragged(0.0, 9.0).height, 1e-9)
+    }
+
     @Test fun readsMovesAndSurroundingsLoosely() {
         assertEquals(SpaceMove.CLOSER, SpaceMove.of(" Closer"))
         assertNull(SpaceMove.of("sideways"))

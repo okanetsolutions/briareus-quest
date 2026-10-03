@@ -1,6 +1,7 @@
 package com.okanetsolutions.briareus.core
 
 import kotlin.math.abs
+import kotlin.math.atan2
 import kotlin.math.roundToInt
 
 /**
@@ -38,6 +39,10 @@ sealed interface SpacePanel {
  * away, [height] metres above or below eye level, and [scale] times its usual size.
  */
 data class Placement(val yaw: Double, val distance: Double, val height: Double = 0.0, val scale: Double = 1.0) {
+    /** Moved by [right] and [down] metres across the panel's face, as its title bar is dragged: around the user and up or down. */
+    fun dragged(right: Double, down: Double): Placement =
+        copy(yaw = SpaceLayout.wrap(yaw + Math.toDegrees(atan2(right, distance))), height = (height - down).coerceIn(-SpaceLayout.MAX_HEIGHT, SpaceLayout.ROW_HEIGHT + SpaceLayout.MAX_HEIGHT))
+
     /** Where it is, as the user would say it. */
     val where: String
         get() {
@@ -77,14 +82,19 @@ enum class Surroundings(val wire: String) {
 }
 
 /**
- * The panels around the user and where each floats. Something newly shown comes to the front and what was there steps
- * aside to the nearest free place, so a spoken "show me" always lands in view. Immutable: every change is a new layout.
+ * The panels around the user and where each floats. Something newly shown comes to the front, where the user is
+ * [facing] (degrees from where the space first opened), and what was there steps aside to the nearest free place, so a
+ * spoken "show me" always lands in view. Immutable: every change is a new layout.
  */
-data class SpaceLayout(val panels: List<Pair<SpacePanel, Placement>>) {
+data class SpaceLayout(val panels: List<Pair<SpacePanel, Placement>>, val facing: Double = 0.0) {
     operator fun get(key: String): Pair<SpacePanel, Placement>? = panels.firstOrNull { it.first.key == key }
 
-    /** The panel straight ahead, if one is. */
-    val front: SpacePanel? get() = panels.filter { abs(it.second.yaw) < Placement.CENTERED }.minByOrNull { abs(it.second.yaw) }?.first
+    /** The panel straight ahead of where the user faces, if one is. */
+    val front: SpacePanel? get() = panels.filter { inFront(it.second) }.minByOrNull { abs(wrap(it.second.yaw - facing)) }?.first
+
+    private fun inFront(at: Placement) = abs(wrap(at.yaw - facing)) < Placement.CENTERED && abs(at.height) < ROW_HEIGHT / 2
+
+    private fun with(panels: List<Pair<SpacePanel, Placement>>) = SpaceLayout(panels, facing)
 
     /**
      * Shows [panel]: replaces the one with its key, and brings it to the front when [focus], else to a free place. Past
@@ -92,12 +102,12 @@ data class SpaceLayout(val panels: List<Pair<SpacePanel, Placement>>) {
      */
     fun show(panel: SpacePanel, focus: Boolean = true): SpaceLayout {
         val existing = this[panel.key]
-        val replaced = SpaceLayout(panels.map { if (it.first.key == panel.key) panel to it.second else it })
+        val replaced = with(panels.map { if (it.first.key == panel.key) panel to it.second else it })
         if (existing != null) return if (focus) replaced.toFront(panel.key) else replaced
         val extra = panels.filter { it.first !in FIXED }
         val room = if (extra.size >= MAX_EXTRA) close(extra.first().first.key) else this
-        val place = if (focus) home(panel).copy(yaw = 0.0, height = 0.0) else room.freePlace(home(panel))
-        return SpaceLayout(room.panels + (panel to place)).let { if (focus) it.stepAside(panel.key, null) else it }
+        val place = if (focus) home(panel).copy(yaw = facing, height = 0.0) else room.freePlace(home(panel).let { it.copy(yaw = wrap(it.yaw + facing)) })
+        return with(room.panels + (panel to place)).let { if (focus) it.stepAside(panel.key, null) else it }
     }
 
     /** The newest panel of [kind] ("diff", "pull", ...), for when the voice names a kind rather than a panel. */
@@ -108,28 +118,31 @@ data class SpaceLayout(val panels: List<Pair<SpacePanel, Placement>>) {
     fun move(key: String, move: SpaceMove): SpaceLayout? {
         if (move == SpaceMove.RESET) return reset()
         val (panel, at) = this[key] ?: return null
-        fun with(p: Placement) = SpaceLayout(panels.map { if (it.first.key == key) panel to p else it })
+        fun place(p: Placement) = with(panels.map { if (it.first.key == key) panel to p else it })
         return when (move) {
             SpaceMove.FRONT -> toFront(key)
-            SpaceMove.LEFT -> with(at.copy(yaw = wrap(at.yaw - STEP_DEGREES)))
-            SpaceMove.RIGHT -> with(at.copy(yaw = wrap(at.yaw + STEP_DEGREES)))
-            SpaceMove.CLOSER -> with(at.copy(distance = (at.distance - STEP_METRES).coerceAtLeast(MIN_DISTANCE)))
-            SpaceMove.FARTHER -> with(at.copy(distance = (at.distance + STEP_METRES).coerceAtMost(MAX_DISTANCE)))
-            SpaceMove.BIGGER -> with(at.copy(scale = (at.scale * SCALE_STEP).coerceAtMost(MAX_SCALE)))
-            SpaceMove.SMALLER -> with(at.copy(scale = (at.scale / SCALE_STEP).coerceAtLeast(MIN_SCALE)))
-            SpaceMove.UP -> with(at.copy(height = (at.height + STEP_HEIGHT).coerceAtMost(MAX_HEIGHT)))
-            SpaceMove.DOWN -> with(at.copy(height = (at.height - STEP_HEIGHT).coerceAtLeast(-MAX_HEIGHT)))
+            SpaceMove.LEFT -> place(at.copy(yaw = wrap(at.yaw - STEP_DEGREES)))
+            SpaceMove.RIGHT -> place(at.copy(yaw = wrap(at.yaw + STEP_DEGREES)))
+            SpaceMove.CLOSER -> place(at.copy(distance = (at.distance - STEP_METRES).coerceAtLeast(MIN_DISTANCE)))
+            SpaceMove.FARTHER -> place(at.copy(distance = (at.distance + STEP_METRES).coerceAtMost(MAX_DISTANCE)))
+            SpaceMove.BIGGER -> place(at.copy(scale = (at.scale * SCALE_STEP).coerceAtMost(MAX_SCALE)))
+            SpaceMove.SMALLER -> place(at.copy(scale = (at.scale / SCALE_STEP).coerceAtLeast(MIN_SCALE)))
+            SpaceMove.UP -> place(at.copy(height = (at.height + STEP_HEIGHT).coerceAtMost(MAX_HEIGHT)))
+            SpaceMove.DOWN -> place(at.copy(height = (at.height - STEP_HEIGHT).coerceAtLeast(-MAX_HEIGHT)))
             SpaceMove.CLOSE -> if (panel == SpacePanel.Main) null else close(key)
             SpaceMove.RESET -> reset()
         }
     }
 
-    fun close(key: String): SpaceLayout = SpaceLayout(panels.filter { it.first.key != key || it.first == SpacePanel.Main })
+    fun close(key: String): SpaceLayout = with(panels.filter { it.first.key != key || it.first == SpacePanel.Main })
 
     /** Where the user moved a panel by hand, kept so the next spoken move starts from there. */
-    fun moved(key: String, place: Placement): SpaceLayout = SpaceLayout(panels.map { if (it.first.key == key) it.first to place else it })
+    fun moved(key: String, place: Placement): SpaceLayout = with(panels.map { if (it.first.key == key) it.first to place else it })
 
-    /** Every open panel back where it first appears, the main window in front. */
+    /** The user now faces [degrees] from where the space opened; small turns are not worth a new layout. */
+    fun facing(degrees: Double): SpaceLayout = if (abs(wrap(degrees - facing)) < FACING_STEP) this else copy(facing = wrap(degrees))
+
+    /** Every open panel back where it first appears, the main window in front; the space is placed again around where the user looks. */
     fun reset(): SpaceLayout {
         var out = SpaceLayout(panels.filter { it.first in FIXED })
             .let { l -> SpaceLayout(l.panels.map { it.first to home(it.first) }) }
@@ -140,34 +153,35 @@ data class SpaceLayout(val panels: List<Pair<SpacePanel, Placement>>) {
     /** What the voice is told: each panel, what it shows and where. */
     fun describe(title: (SpacePanel) -> String): List<Map<String, Any?>> = panels.sortedBy { it.second.yaw }.map { (panel, at) ->
         mapOf(
-            "panel" to panel.key, "shows" to title(panel), "where" to at.where,
+            "panel" to panel.key, "shows" to title(panel), "where" to at.copy(yaw = wrap(at.yaw - facing)).where,
             "distance_m" to (at.distance * 10).roundToInt() / 10.0, "size" to if (at.scale == 1.0) null else "${(at.scale * 100).roundToInt()}%",
         )
     }
 
     private fun toFront(key: String): SpaceLayout {
         val (panel, at) = this[key] ?: return this
-        if (abs(at.yaw) < Placement.CENTERED && abs(at.height) < ROW_HEIGHT / 2) return this
-        return SpaceLayout(panels.map { if (it.first.key == key) panel to at.copy(yaw = 0.0, height = 0.0) else it }).stepAside(key, at)
+        if (inFront(at)) return this
+        return with(panels.map { if (it.first.key == key) panel to at.copy(yaw = facing, height = 0.0) else it }).stepAside(key, at)
     }
 
     /** Moves whatever else is in front out of [key]'s way: to where [key] was when it left a place, else to the nearest free one. */
     private fun stepAside(key: String, vacated: Placement?): SpaceLayout {
         var out = this
-        panels.filter { (p, at) -> p.key != key && abs(at.yaw) < Placement.CENTERED && abs(at.height) < ROW_HEIGHT / 2 }.forEach { (p, at) ->
-            val others = SpaceLayout(out.panels.filter { it.first.key != p.key })
-            val preferred = home(p).yaw.takeIf { abs(it) >= Placement.CENTERED } ?: SLOTS[1]
-            val to = vacated?.let { at.copy(yaw = it.yaw, height = it.height) } ?: others.freePlace(at.copy(yaw = preferred, height = 0.0))
+        panels.filter { (p, at) -> p.key != key && inFront(at) }.forEach { (p, at) ->
+            val others = with(out.panels.filter { it.first.key != p.key })
+            val preferred = facing + (home(p).yaw.takeIf { abs(it) >= Placement.CENTERED } ?: SLOTS[1])
+            val to = vacated?.let { at.copy(yaw = it.yaw, height = it.height) } ?: others.freePlace(at.copy(yaw = wrap(preferred), height = 0.0))
             out = out.moved(p.key, to)
         }
         return out
     }
 
-    /** [at] moved to the free slot nearest it, on the eye-level row first and then the row above. */
+    /** [at] moved to the free slot nearest it, around where the user faces, on the eye-level row first and then the row above. */
     private fun freePlace(at: Placement): Placement {
         fun taken(yaw: Double, height: Double) = panels.any { abs(wrap(it.second.yaw - yaw)) < SLOT_GAP && abs(it.second.height - height) < ROW_HEIGHT / 2 }
+        val slots = SLOTS.map { wrap(it + facing) }
         for (height in listOf(0.0, ROW_HEIGHT)) {
-            SLOTS.filter { !taken(it, height) }.minByOrNull { abs(wrap(it - at.yaw)) }?.let { return at.copy(yaw = it, height = height) }
+            slots.filter { !taken(it, height) }.minByOrNull { abs(wrap(it - at.yaw)) }?.let { return at.copy(yaw = it, height = height) }
         }
         return at
     }
@@ -202,6 +216,8 @@ data class SpaceLayout(val panels: List<Pair<SpacePanel, Placement>>) {
         }
 
         private const val SLOT_GAP = 25.0
+        /** Turning less than this keeps the same front. */
+        private const val FACING_STEP = 10.0
 
         /** An angle in (-180, 180]. */
         fun wrap(degrees: Double): Double {

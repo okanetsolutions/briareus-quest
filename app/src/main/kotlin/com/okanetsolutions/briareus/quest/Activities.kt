@@ -12,23 +12,16 @@ import androidx.activity.result.ActivityResultRegistryOwner
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions
 import androidx.core.app.ActivityOptionsCompat
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
-import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.meta.spatial.compose.ComposeFeature
 import com.meta.spatial.compose.ComposeViewPanelRegistration
@@ -37,6 +30,8 @@ import com.meta.spatial.core.Pose
 import com.meta.spatial.core.SpatialFeature
 import com.meta.spatial.core.Vector2
 import com.meta.spatial.core.Vector3
+import com.meta.spatial.isdk.IsdkGrabMovementType
+import com.meta.spatial.isdk.IsdkGrabState
 import com.meta.spatial.isdk.IsdkGrabbable
 import com.meta.spatial.isdk.IsdkPanelResize
 import com.meta.spatial.isdk.ResizeMode
@@ -65,10 +60,11 @@ import com.okanetsolutions.briareus.quest.ui.BriareusTheme
 import com.okanetsolutions.briareus.quest.ui.ConversationScreen
 import com.okanetsolutions.briareus.quest.ui.DiffScreen
 import com.okanetsolutions.briareus.quest.ui.HomeScreen
-import com.okanetsolutions.briareus.quest.ui.LocalPalette
 import com.okanetsolutions.briareus.quest.ui.PairingScreen
 import com.okanetsolutions.briareus.quest.ui.PanelFrame
 import com.okanetsolutions.briareus.quest.ui.PageScreen
+import com.okanetsolutions.briareus.quest.ui.PairFirst
+import com.okanetsolutions.briareus.quest.ui.panelTitle
 import com.okanetsolutions.briareus.quest.ui.Pane
 import com.okanetsolutions.briareus.quest.ui.PullScreen
 import com.okanetsolutions.briareus.quest.ui.PullsScreen
@@ -200,7 +196,10 @@ class MainActivity : AppSystemActivity() {
             placed.clear()
             draw(navigator.space.value)
         }
-        if (++ticks % GRAB_CHECK_TICKS == 0L) readBackMoves()
+        if (++ticks % GRAB_CHECK_TICKS == 0L) {
+            readBackMoves()
+            room?.let { navigator.space.value = navigator.space.value.facing(it.yaw(head.forward())) }
+        }
     }
 
     private fun surround(s: Surroundings) {
@@ -221,7 +220,7 @@ class MainActivity : AppSystemActivity() {
                     listOf(
                         Panel(registration(panel)), Transform(pose), Scale(Vector3(at.scale.toFloat())),
                         // Moved by its grab handles and resized from its corners; the resize adds the handles once the panel has its size.
-                        IsdkGrabbable(enabled = true),
+                        IsdkGrabbable(enabled = true, movementType = IsdkGrabMovementType.Billboard),
                         IsdkPanelResize(enabled = true, resizeMode = ResizeMode.Relayout, minDimensions = Vector2(0.4f, 0.3f), maxDimensions = Vector2(3.0f, 2.0f)),
                     ),
                 ).also(::makeHittable)
@@ -244,19 +243,34 @@ class MainActivity : AppSystemActivity() {
         }
     }
 
-    /** A panel the user carried somewhere by hand: keep its new place in the layout, so the next spoken move starts there. */
+    /**
+     * A panel the user carried somewhere with the grip: once let go, keep its new place in the layout, so the next spoken
+     * move starts there. It is not placed again, so it stays exactly where it was let go.
+     */
     private fun readBackMoves() {
         val room = room ?: return
         var layout = navigator.space.value
         entities.forEach { (key, entity) ->
+            if (entity.tryGetComponent<IsdkGrabbable>()?.grabState == IsdkGrabState.Grabbed) return@forEach
             val now = entity.getComponent<Transform>().transform
             val was = placed[key] ?: return@forEach
             if (now.t.distanceTo(was.t) < MOVED_METRES) return@forEach
             val at = layout[key]?.second ?: return@forEach
-            layout = layout.moved(key, room.placement(now.t, at))
-            placed[key] = now
+            val place = room.placement(now.t, at)
+            layout = layout.moved(key, place)
+            placed[key] = room.pose(place)
         }
         if (layout != navigator.space.value) navigator.space.value = layout
+    }
+
+    /** The title bar dragged [by] dp from where it was taken hold of: the panel follows, from where it shows now. */
+    private fun drag(key: String, by: Offset) {
+        val room = room ?: return
+        val now = entities[key]?.getComponent<Transform>()?.transform ?: return
+        val layout = navigator.space.value
+        val at = layout[key]?.second ?: return
+        val metres = at.scale / DP_PER_METRE
+        navigator.space.value = layout.moved(key, room.placement(now.t, at).dragged(by.x * metres, by.y * metres))
     }
 
     /** One panel registration per key, made the first time the panel is shown: its content follows the layout's current panel for that key. */
@@ -294,8 +308,8 @@ class MainActivity : AppSystemActivity() {
         val front = layout.front
         val inFront = front?.key == key || (front == null && panel == SpacePanel.Main)
         val close = if (panel == SpacePanel.Main) null else ({ navigator.close(key) })
-        PanelFrame(store, title(panel), inFront, onFront = { navigator.open(panel) }, onClose = close) {
-            if (connection == null && panel != SpacePanel.Main) { Waiting(); return@PanelFrame }
+        PanelFrame(store, panelTitle(store, panel), inFront, onFront = { navigator.open(panel) }, onClose = close, onDrag = { drag(key, it) }) {
+            if (connection == null && panel != SpacePanel.Main) { PairFirst(); return@PanelFrame }
             when (panel) {
                 SpacePanel.Main -> if (connection == null) PairingScreen(store) else Home()
                 SpacePanel.Status -> StatusScreen(store) { id -> navigator.open(SpacePanel.Conversation(id)) }
@@ -340,26 +354,6 @@ class MainActivity : AppSystemActivity() {
                 if (on) EventsService.start(this) else EventsService.stop(this)
             },
         )
-    }
-
-    @Composable
-    private fun Waiting() {
-        val p = LocalPalette.current
-        Box(Modifier.fillMaxSize().background(p.canvas), contentAlignment = Alignment.Center) {
-            Text("Pair with a Briareus server in the main window first.", Modifier.padding(24.dp), color = p.muted)
-        }
-    }
-
-    private fun title(panel: SpacePanel): String = when (panel) {
-        SpacePanel.Main -> "Briareus"
-        SpacePanel.Status -> "Status"
-        SpacePanel.Voice -> "Voice"
-        is SpacePanel.Conversation -> store.sessions.value[panel.sessionId]?.title ?: "Conversation"
-        is SpacePanel.Pulls -> "Pull requests · ${store.projectTitle(panel.repo)}"
-        is SpacePanel.Pull -> "${store.projectTitle(panel.repo)} #${panel.number}"
-        is SpacePanel.Diff -> "Diff · ${store.projectTitle(panel.repo)} #${panel.number}"
-        is SpacePanel.Preview -> "Preview · " + (store.sessions.value[panel.sessionId]?.title ?: panel.url)
-        is SpacePanel.Web -> panel.url.toUri().let { (it.host ?: "") + (it.path ?: "") }
     }
 
     // MARK: - The microphone

@@ -7,6 +7,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -23,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.DragIndicator
 import androidx.compose.material.icons.outlined.CenterFocusStrong
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.CircularProgressIndicator
@@ -42,7 +45,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -51,6 +57,7 @@ import com.okanetsolutions.briareus.core.ApiError
 import com.okanetsolutions.briareus.core.DiffLine
 import com.okanetsolutions.briareus.core.PullFile
 import com.okanetsolutions.briareus.core.PullFiles
+import com.okanetsolutions.briareus.core.SpacePanel
 import com.okanetsolutions.briareus.core.pullFiles
 import com.okanetsolutions.briareus.quest.Store
 import kotlinx.coroutines.CancellationException
@@ -62,20 +69,38 @@ import kotlinx.coroutines.launch
  * the user looks at, and the panel's own screen below.
  */
 @Composable
-fun PanelFrame(store: Store, title: String, inFront: Boolean, onFront: () -> Unit, onClose: (() -> Unit)?, content: @Composable () -> Unit) {
+fun PanelFrame(store: Store, title: String, inFront: Boolean, onFront: () -> Unit, onClose: (() -> Unit)?, onDrag: (Offset) -> Unit, content: @Composable () -> Unit) {
     val p = LocalPalette.current
     var message by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(inFront) { if (inFront) store.messages.collect { message = it } }
     LaunchedEffect(message) { if (message != null) { delay(6_000); message = null } }
-    OverlayHost { Frame(title, inFront, onFront, onClose, message, { message = null }, content) }
+    OverlayHost { Frame(title, inFront, onFront, onClose, onDrag, message, { message = null }, content) }
 }
 
 @Composable
-private fun Frame(title: String, inFront: Boolean, onFront: () -> Unit, onClose: (() -> Unit)?, message: String?, onMessage: () -> Unit, content: @Composable () -> Unit) {
+private fun Frame(
+    title: String, inFront: Boolean, onFront: () -> Unit, onClose: (() -> Unit)?, onDrag: (Offset) -> Unit,
+    message: String?, onMessage: () -> Unit, content: @Composable () -> Unit,
+) {
     val p = LocalPalette.current
+    val density = LocalDensity.current
     Column(Modifier.fillMaxSize().background(p.canvas, RoundedCornerShape(16.dp))) {
         Row(Modifier.fillMaxWidth().background(p.sidebar, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(title, Modifier.weight(1f), style = MaterialTheme.typography.labelLarge, color = p.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // The title bar moves the panel. The panel follows the pointer, so where the pointer is now against where it
+            // took hold is how far the panel still has to go, in dp: deltas between events would overshoot by a frame.
+            var hold by remember { mutableStateOf(Offset.Zero) }
+            Row(
+                Modifier.weight(1f).heightIn(min = 48.dp).pointerInput(Unit) {
+                    detectDragGestures(onDragStart = { hold = it }) { change, _ ->
+                        change.consume()
+                        onDrag(with(density) { Offset((change.position.x - hold.x).toDp().value, (change.position.y - hold.y).toDp().value) })
+                    }
+                },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Outlined.DragIndicator, "Drag to move", Modifier.padding(end = 8.dp).size(18.dp), tint = p.muted)
+                Text(title, style = MaterialTheme.typography.labelLarge, color = p.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
             if (!inFront) IconButton(onClick = onFront) { Icon(Icons.Outlined.CenterFocusStrong, "Bring to the front", tint = p.muted) }
             if (onClose != null) IconButton(onClick = onClose) { Icon(Icons.Outlined.Close, "Close this panel", tint = p.muted) }
         }
@@ -86,6 +111,28 @@ private fun Frame(title: String, inFront: Boolean, onFront: () -> Unit, onClose:
             )
         }
         Box(Modifier.weight(1f)) { content() }
+    }
+}
+
+/** What a panel's title bar says. */
+fun panelTitle(store: Store, panel: SpacePanel): String = when (panel) {
+    SpacePanel.Main -> "Briareus"
+    SpacePanel.Status -> "Status"
+    SpacePanel.Voice -> "Voice"
+    is SpacePanel.Conversation -> store.sessions.value[panel.sessionId]?.title ?: "Conversation"
+    is SpacePanel.Pulls -> "Pull requests · ${store.projectTitle(panel.repo)}"
+    is SpacePanel.Pull -> "${store.projectTitle(panel.repo)} #${panel.number}"
+    is SpacePanel.Diff -> "Diff · ${store.projectTitle(panel.repo)} #${panel.number}"
+    is SpacePanel.Preview -> "Preview · " + (store.sessions.value[panel.sessionId]?.title ?: panel.url)
+    is SpacePanel.Web -> panel.url.toUri().let { (it.host ?: "") + (it.path ?: "") }
+}
+
+/** What a panel other than the main window shows before the headset is paired. */
+@Composable
+fun PairFirst() {
+    val p = LocalPalette.current
+    Box(Modifier.fillMaxSize().background(p.canvas), contentAlignment = Alignment.Center) {
+        Text("Pair with a Briareus server in the main window first.", Modifier.padding(24.dp), color = p.muted)
     }
 }
 
