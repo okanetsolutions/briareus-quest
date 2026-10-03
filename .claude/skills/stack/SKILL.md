@@ -1,14 +1,16 @@
 ---
 name: stack
-description: The conventions of this codebase: Kotlin and Jetpack Compose on Horizon OS as 2D panels, the portable core with no Android code, the Store as the seam, every server call named in one Routes table and gated by the route catalog, and the comment and line style. Use before writing or reviewing any code under core/ or app/.
+description: The conventions of this codebase: Kotlin and Jetpack Compose panels in an immersive Meta Spatial SDK space on Horizon OS, the portable core with no Android code, the Store as the seam, every server call named in one Routes table and gated by the route catalog, and the comment and line style. Use before writing or reviewing any code under core/ or app/.
 ---
 
 # This project's stack and conventions
 
 **Kotlin 2.2, Jetpack Compose (Material 3), minSdk 32, targetSdk 34, JDK 17 bytecode.** Horizon OS on Quest 2, 3, 3S
 and Pro is Android 12L to 14; targeting 34 is deliberate and lint's `OldTargetApi` is disabled for that reason. There
-is no XR SDK: the app is ordinary 2D Android panels (`FLAG_ACTIVITY_LAUNCH_ADJACENT`, `NEW_DOCUMENT` per conversation,
-see `Windows.kt`), which is what makes it sit beside other apps.
+is one immersive activity on the Meta Spatial SDK (`MainActivity`, an `AppSystemActivity`): every screen is a Compose
+panel entity floating around the user, over passthrough or a skybox. Where the panels are is `SpaceLayout` in the core
+(pure, tested); `Navigator.space` holds it and the activity only draws it and reads back a panel moved by hand. Meta's
+Gradle plugin is deliberately not applied (it serves the Spatial Editor and hot reload, and collects usage data).
 
 **Two modules, one seam.**
 

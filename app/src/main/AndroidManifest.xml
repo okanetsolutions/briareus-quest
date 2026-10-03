@@ -10,9 +10,16 @@
   <!-- The voice conversation runs the microphone and speaker as a call, for the echo canceller. -->
   <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
-  <!-- A 2D panel app: no VR mode, no controllers or hand tracking required beyond the system pointer. -->
+  <!-- An immersive app: the scene runs on OpenXR with head tracking; passthrough, hands and the system keyboard when there. -->
+  <uses-feature android:name="android.hardware.vr.headtracking" android:required="true" android:version="1" />
+  <uses-feature android:glEsVersion="0x00030001" android:required="true" />
+  <uses-feature android:name="com.oculus.feature.PASSTHROUGH" android:required="false" />
+  <uses-feature android:name="oculus.software.handtracking" android:required="false" />
+  <uses-feature android:name="com.oculus.feature.VIRTUAL_KEYBOARD" android:required="false" />
+  <uses-feature android:name="oculus.software.overlay_keyboard" android:required="false" />
   <uses-feature android:name="android.hardware.microphone" android:required="false" />
   <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+  <uses-permission android:name="com.oculus.permission.HAND_TRACKING" />
 
   <application
     android:name=".BriareusApp"
@@ -27,53 +34,22 @@
 
     <meta-data android:name="com.oculus.supportedDevices" android:value="quest2|quest3|quest3s|questpro" />
 
-    <!-- The main window: the projects and conversations beside the chosen conversation, wide like the dashboard. -->
+    <meta-data android:name="com.oculus.handtracking.version" android:value="V2.0" />
+    <meta-data android:name="com.oculus.vr.focusaware" android:value="true" />
+    <uses-native-library android:name="libossdk.oculus.so" android:required="true" />
+
+    <!-- The space: every panel floats around the user in it. Opened again by a notification's tap, with the panel to show. -->
     <activity
       android:name=".MainActivity"
-      android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation"
+      android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation|uiMode"
+      android:excludeFromRecents="false"
       android:exported="true"
-      android:launchMode="singleTask"
-      android:resizeableActivity="true"
-      android:windowSoftInputMode="adjustResize">
-      <layout android:defaultWidth="1280dp" android:defaultHeight="800dp" android:minWidth="640dp" android:minHeight="480dp" />
+      android:launchMode="singleTask">
       <intent-filter>
         <action android:name="android.intent.action.MAIN" />
+        <category android:name="com.oculus.intent.category.VR" />
         <category android:name="android.intent.category.LAUNCHER" />
       </intent-filter>
-    </activity>
-
-    <!-- One conversation in a window of its own, placed beside the others; one task per conversation. -->
-    <activity
-      android:name=".ConversationActivity"
-      android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation"
-      android:documentLaunchMode="intoExisting"
-      android:exported="false"
-      android:resizeableActivity="true"
-      android:taskAffinity=""
-      android:windowSoftInputMode="adjustResize">
-      <layout android:defaultWidth="760dp" android:defaultHeight="900dp" android:minWidth="420dp" android:minHeight="480dp" />
-    </activity>
-
-    <!-- The status panel: a narrow window to keep in the corner of your eye next to a video. -->
-    <activity
-      android:name=".StatusActivity"
-      android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation"
-      android:exported="false"
-      android:launchMode="singleTask"
-      android:resizeableActivity="true"
-      android:taskAffinity="com.okanetsolutions.briareus.quest.status">
-      <layout android:defaultWidth="400dp" android:defaultHeight="640dp" android:minWidth="320dp" android:minHeight="360dp" />
-    </activity>
-
-    <!-- The voice panel: talk to GPT-Realtime about your projects, and have the other windows follow. -->
-    <activity
-      android:name=".VoiceActivity"
-      android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation"
-      android:exported="false"
-      android:launchMode="singleTask"
-      android:resizeableActivity="true"
-      android:taskAffinity="com.okanetsolutions.briareus.quest.voice">
-      <layout android:defaultWidth="460dp" android:defaultHeight="720dp" android:minWidth="340dp" android:minHeight="420dp" />
     </activity>
 
     <!-- Keeps the microphone open while a voice conversation goes on and you look at another app. -->

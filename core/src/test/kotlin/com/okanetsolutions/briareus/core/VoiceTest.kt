@@ -88,8 +88,9 @@ class VoiceTest {
     }
 
     @Test fun screenToolsShowWithoutConfirmation() {
-        assertEquals(VoicePlan.Show(ScreenAction.Conversation("s1", false)), plan(VoiceTool.SHOW_CONVERSATION, """{"session_id":"s1"}"""))
-        assertEquals(VoicePlan.Show(ScreenAction.Conversation("s1", true)), plan(VoiceTool.SHOW_CONVERSATION, """{"session_id":"s1","own_panel":true}"""))
+        // A conversation gets a screen of its own unless the main window is asked for.
+        assertEquals(VoicePlan.Show(ScreenAction.Conversation("s1", true)), plan(VoiceTool.SHOW_CONVERSATION, """{"session_id":"s1"}"""))
+        assertEquals(VoicePlan.Show(ScreenAction.Conversation("s1", false)), plan(VoiceTool.SHOW_CONVERSATION, """{"session_id":"s1","own_panel":false}"""))
         assertEquals(VoicePlan.Show(ScreenAction.Preview("s1")), plan(VoiceTool.SHOW_PREVIEW, """{"session_id":"s1"}"""))
         assertEquals(VoicePlan.Show(ScreenAction.Issue("acme/api", 3)), plan(VoiceTool.SHOW_ISSUE, """{"issue":3,"project":"api"}"""))
         assertEquals(VoicePlan.Show(ScreenAction.PullRequests("acme/api")), plan(VoiceTool.SHOW_PULL_REQUESTS, """{"project":"api"}"""))
@@ -107,13 +108,18 @@ class VoiceTest {
 
     @Test fun thisPullRequestIsTheOneOnScreen() {
         val watching = context.copy(onScreen = login)
-        // In the main window, unless its files (which the app does not list) or the browser are asked for.
+        // In the main window, its files in the diff panel, and the browser only when asked for.
         assertEquals(VoicePlan.Show(ScreenAction.PullRequest("acme/web", 42, null, false)), plan(VoiceTool.SHOW_PULL_REQUEST, """{"view":"overview"}""", watching))
-        assertEquals(VoicePlan.Show(ScreenAction.PullRequest("acme/web", 42, "files", true)), plan(VoiceTool.SHOW_PULL_REQUEST, """{"view":"files"}""", watching))
+        assertEquals(VoicePlan.Show(ScreenAction.Diff("acme/web", 42, null)), plan(VoiceTool.SHOW_PULL_REQUEST, """{"view":"files"}""", watching))
+        assertEquals(VoicePlan.Show(ScreenAction.Diff("acme/web", 42, "Routes.kt")), plan(VoiceTool.SHOW_DIFF, """{"file":"Routes.kt"}""", watching))
+        assertEquals(VoicePlan.Show(ScreenAction.Diff("acme/api", 9, null)), plan(VoiceTool.SHOW_DIFF, """{"number":9,"project":"api"}""", watching))
+        assertEquals(VoicePlan.Show(ScreenAction.PullRequest("acme/web", 42, "files", true)), plan(VoiceTool.SHOW_PULL_REQUEST, """{"view":"files","in_browser":true}""", watching))
         assertEquals(VoicePlan.Show(ScreenAction.PullRequest("acme/web", 42, "checks", true)), plan(VoiceTool.SHOW_PULL_REQUEST, """{"view":"checks","in_browser":true}""", watching))
         assertEquals(VoicePlan.Show(ScreenAction.PullRequest("acme/api", 9, null, false)), plan(VoiceTool.SHOW_PULL_REQUEST, """{"number":9,"project":"api"}""", watching))
         // A pull request in the main window is "this" one; its project's list is where the list's project comes from.
         val onPull = context.copy(pullOnScreen = "acme/api" to 7)
+        assertEquals(VoicePlan.Show(ScreenAction.Diff("acme/api", 7, null)), plan(VoiceTool.SHOW_DIFF, "{}", onPull))
+        assertTrue(plan(VoiceTool.SHOW_DIFF, "{}") is VoicePlan.Refuse)
         assertEquals(VoicePlan.Show(ScreenAction.PullRequest("acme/api", 7, null, true)), plan(VoiceTool.SHOW_PULL_REQUEST, """{"in_browser":true}""", onPull))
         val onList = context.copy(pullOnScreen = "acme/api" to null)
         assertTrue(plan(VoiceTool.SHOW_PULL_REQUEST, "{}", onList) is VoicePlan.Refuse)
@@ -121,6 +127,17 @@ class VoiceTest {
         assertTrue(plan(VoiceTool.SHOW_PULL_REQUEST, "{}") is VoicePlan.Refuse)
         // The new conversation form opens on the project on screen.
         assertEquals(VoicePlan.Show(ScreenAction.NewConversation("acme/web", null)), plan(VoiceTool.SHOW_NEW_CONVERSATION, "{}", watching))
+    }
+
+    @Test fun arrangesTheSpace() {
+        assertEquals(VoicePlan.Show(ScreenAction.Arrange("diff", SpaceMove.LEFT)), plan(VoiceTool.ARRANGE_PANEL, """{"panel":"Diff","move":"left"}"""))
+        assertEquals(VoicePlan.Show(ScreenAction.Arrange("s1", SpaceMove.CLOSE)), plan(VoiceTool.ARRANGE_PANEL, """{"panel":"s1","move":"close"}"""))
+        assertEquals(VoicePlan.Show(ScreenAction.Arrange(null, SpaceMove.RESET)), plan(VoiceTool.ARRANGE_PANEL, """{"move":"reset"}"""))
+        assertTrue(plan(VoiceTool.ARRANGE_PANEL, """{"move":"bigger"}""") is VoicePlan.Refuse)
+        assertTrue(plan(VoiceTool.ARRANGE_PANEL, """{"panel":"main","move":"sideways"}""") is VoicePlan.Refuse)
+        assertEquals(VoicePlan.Show(ScreenAction.Surround(Surroundings.VIRTUAL)), plan(VoiceTool.SET_SURROUNDINGS, """{"surroundings":"virtual"}"""))
+        assertTrue(plan(VoiceTool.SET_SURROUNDINGS, """{"surroundings":"beach"}""") is VoicePlan.Refuse)
+        assertEquals(SpaceMove.entries.map { it.wire }, VoiceTool.ARRANGE_PANEL.definition.obj("parameters")!!.obj("properties")!!.obj("move")!!.strings("enum"))
     }
 
     @Test fun pageAddresses() {

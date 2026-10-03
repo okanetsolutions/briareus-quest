@@ -52,7 +52,7 @@ The same checks run in CI for every pull request, and every one must pass:
 - Follow the file you are in: 4-space indent, short comments that say why.
 - Add a dependency only when the platform has nothing that does the job.
 - Match the dashboard: labels, colours, type and behaviour follow the web app and the Windows client where they overlap.
-- Think in panels: every window has to work beside YouTube or a chat, at a metre or more, with a pointer instead of a finger.
+- Think in panels in a space: every panel floats a metre or two away and is used with a pointer or by voice.
 
 ## Sending a change
 

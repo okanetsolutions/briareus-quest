@@ -1,8 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-  <style name="Theme.Briareus" parent="android:Theme.Material.NoActionBar">
-    <item name="android:windowBackground">@color/canvas</item>
-    <item name="android:statusBarColor">@color/canvas</item>
-    <item name="android:navigationBarColor">@color/canvas</item>
+  <!-- The immersive activity: no window of its own to draw, the scene fills the view. -->
+  <style name="Theme.Briareus" parent="android:Theme.Black.NoTitleBar.Fullscreen" />
+
+  <!-- A panel in the space: transparent around its rounded corners, so nothing square shows behind it. -->
+  <style name="Theme.Briareus.Panel" parent="android:Theme.Material.NoActionBar">
+    <item name="android:windowIsTranslucent">true</item>
+    <item name="android:windowBackground">@android:color/transparent</item>
+    <item name="android:backgroundDimEnabled">false</item>
   </style>
 </resources>

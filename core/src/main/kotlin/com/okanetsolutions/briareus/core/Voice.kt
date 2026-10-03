@@ -35,7 +35,7 @@ object Voice {
         val named = projects.joinToString("; ") { if (it.title == it.repo) it.repo else "${it.title} (${it.repo})" }.ifEmpty { "none yet" }
         return """
         You are the voice of Briareus on a Meta Quest headset. Briareus runs coding agents on the user's projects. The user \
-        talks to you hands-free while the app's panels float around them, often beside a video. Answer in the language the \
+        talks to you hands-free while the app's panels float around them in an immersive space. Answer in the language the \
         user speaks, in one or two short sentences. Speak only when the user has said something; do not volunteer updates.
 
         ## Projects
@@ -43,16 +43,21 @@ object Voice {
         means the conversation on screen, or when there is only one project. If it is unclear which project the user means, \
         ask.
 
-        ## The screen
-        You also drive the app's panels. When the user says "show", "open", "bring up", "go to" or "let me see", use the \
-        show_ tools: show_conversation puts a conversation in the main window (or in a panel of its own), \
-        show_pull_requests puts a project's open pull requests there, show_pull_request one pull request (its \
-        description, checks, reviews, findings and commits; its files and anything asked for in the browser open on \
-        GitHub beside the app), show_issue opens an issue in the browser, show_preview opens a conversation's running \
-        app, show_new_conversation opens the form to start one (with a prompt filled in if the user dictated one), \
-        show_status_panel opens the status panel, and go_home leaves the main window on the list. These only show things; they need no confirmation. When the user says "this", "that", "it" or \
-        "here", call read_screen first to learn what is on screen: "this pull request" is the pull request of the \
-        conversation on screen. After showing something, say in a few words what is now on screen.
+        ## The space
+        You drive the panels around the user; the user has full control of them by voice. When the user says "show", \
+        "open", "bring up", "go to" or "let me see", use the show_ tools. Each opens a screen of its own in front of the \
+        user, and what was there steps aside, so the user gathers a bunch of screens around them: show_conversation \
+        opens a conversation, show_pull_requests a project's open pull requests, show_pull_request one pull request (its \
+        description, checks, reviews, findings and commits), show_diff its changed files line by line ("show me the \
+        diff", "the changes", "the code"), show_preview a conversation's running app ("show me the view", "the preview", \
+        "the app"), show_issue an issue's page, show_new_conversation the form to start one in the main window (with a \
+        prompt filled in if the user dictated one), show_status_panel the status panel, and go_home leaves the main \
+        window on the list. Showing something already open brings its screen forward. arrange_panel moves, resizes, closes \
+        or brings forward any panel ("move the diff to the left", "make it bigger", "bring the status closer", "close \
+        the preview", "put everything back"), and set_surroundings switches between the real room and the virtual one. \
+        These need no confirmation. When the user says "this", "that", "it" or "here", call read_screen first to learn \
+        what is on screen and where: "this pull request" is the pull request of the conversation on screen, and "this \
+        panel" is the one in front. After changing the space, say in a few words what is now where.
 
         ## Conversations and pull requests
         Find conversations with list_conversations before acting on one; never invent an id. Match what the user names \
@@ -366,8 +371,13 @@ sealed interface ScreenAction {
     data class PullRequests(val repo: String) : ScreenAction
     data class Issue(val repo: String, val number: Int) : ScreenAction
     data class Preview(val sessionId: String) : ScreenAction
+    /** A pull request's changed files in the diff panel, opened at [file] when the user named one. */
+    data class Diff(val repo: String, val number: Int, val file: String?) : ScreenAction
     data object StatusPanel : ScreenAction
     data object Home : ScreenAction
+    /** Moves the panel named [panel] (a panel's key, or "front" for the one ahead); [panel] is null for a reset. */
+    data class Arrange(val panel: String?, val move: SpaceMove) : ScreenAction
+    data class Surround(val surroundings: Surroundings) : ScreenAction
 }
 
 /** What a tool call becomes on the headset. */
@@ -414,6 +424,9 @@ enum class VoiceTool(val wire: String) {
     SHOW_PREVIEW("show_preview"),
     SHOW_NEW_CONVERSATION("show_new_conversation"),
     SHOW_STATUS_PANEL("show_status_panel"),
+    SHOW_DIFF("show_diff"),
+    ARRANGE_PANEL("arrange_panel"),
+    SET_SURROUNDINGS("set_surroundings"),
     GO_HOME("go_home");
 
     /** The client API call each server tool makes; null for the screen's own. */
@@ -487,29 +500,51 @@ enum class VoiceTool(val wire: String) {
                     "Sends a message to a conversation's agent, or answers its question. A busy agent gets it in its running turn or the next."
                 }
                 STOP_CONVERSATION -> { session(); confirmed(); "Stops the agent's running turn. The conversation stays open." }
-                READ_SCREEN -> "What the app's windows show right now: the conversation or pull request in the main window with its project, and the conversations open in panels of their own."
+                READ_SCREEN ->
+                    "What the space shows right now: the conversation or pull request in the main window with its project, the conversations open in panels of their own, " +
+                        "every panel with where it floats, and whether the user sees the room or the virtual surroundings."
                 SHOW_CONVERSATION -> {
                     session()
-                    add("own_panel", "boolean", "True to open it in a panel of its own beside the others instead of the main window.", false)
+                    add("own_panel", "boolean", "False to put it in the main window instead of a panel of its own. Omit for its own panel.", false)
                     "Shows a conversation: its transcript, its question, its findings and its composer."
                 }
-                SHOW_PULL_REQUESTS -> { project(); "Shows a project's open pull requests in the main window, with their checks, labels and actions." }
+                SHOW_PULL_REQUESTS -> { project(); "Shows a project's open pull requests in a panel of their own, with their checks, labels and actions." }
                 SHOW_PULL_REQUEST -> {
                     add("number", "integer", "The pull request's number, from a conversation's pull_request or list_pull_requests. Omit for the pull request on screen.", false); project()
-                    add(
-                        "view", "string", "What to show. files opens GitHub's files page in the browser, as the app does not list them. Omit for the overview.",
-                        false, listOf("overview", "files", "checks", "commits"),
-                    )
-                    add("in_browser", "boolean", "True to open its page on GitHub in the browser beside the app instead of the main window.", false)
-                    "Shows one pull request in the main window: its status, description, checks, reviews, findings, linked issues and commits."
+                    add("view", "string", "What to show. files shows the diff in its own panel, as show_diff does. Omit for the overview.", false, listOf("overview", "files", "checks", "commits"))
+                    add("in_browser", "boolean", "True to open its page on GitHub, in a web panel, instead of the app's own view of it.", false)
+                    "Shows one pull request in a panel of its own: its status, description, checks, reviews, findings, linked issues and commits."
                 }
-                SHOW_ISSUE -> { add("issue", "integer", "The issue's number."); project(); "Opens an issue's page in the browser beside the app." }
-                SHOW_PREVIEW -> { session(); "Opens what a conversation's ▶ Run serves, its running app, in the browser." }
+                SHOW_ISSUE -> { add("issue", "integer", "The issue's number."); project(); "Opens an issue's GitHub page in a panel of its own." }
+                SHOW_PREVIEW -> { session(); "Opens what a conversation's ▶ Run serves, its running app, in a panel of its own." }
                 SHOW_NEW_CONVERSATION -> {
                     project(); add("prompt", "string", "A first message to fill in, as the user dictated it, for them to review and start.", false)
                     "Opens the form that starts a conversation, on a project, for the user to choose its runtime and start it themselves."
                 }
                 SHOW_STATUS_PANEL -> "Opens the status panel: what is waiting, working and ready, in a narrow window."
+                SHOW_DIFF -> {
+                    add("number", "integer", "The pull request's number. Omit for the pull request on screen, or the one of the conversation on screen.", false); project()
+                    add("file", "string", "A file to open the diff at, by its path or name as the user said it. Omit for every file.", false)
+                    "Shows what a pull request changes, file by file and line by line, in a panel of its own in front of the user."
+                }
+                ARRANGE_PANEL -> {
+                    add(
+                        "panel", "string",
+                        "The panel: a panel's key from read_screen, front for the one ahead of the user, or a kind (main, status, voice, conversation, pulls, pull, diff, preview, web) " +
+                            "for the newest of that kind. Omit only to reset.",
+                        false,
+                    )
+                    add(
+                        "move", "string",
+                        "front brings it ahead of the user; left and right turn it 30 degrees; closer and farther, bigger and smaller, up and down; close hides it; reset puts every panel back.",
+                        enum = SpaceMove.entries.map { it.wire },
+                    )
+                    "Moves, resizes, closes or brings forward one of the panels around the user. Call it again for a bigger change."
+                }
+                SET_SURROUNDINGS -> {
+                    add("surroundings", "string", "passthrough shows the user's real room; virtual a calm virtual one.", enum = Surroundings.entries.map { it.wire })
+                    "Switches what is around the panels: the real room through the cameras, or the virtual surroundings."
+                }
                 GO_HOME -> "Leaves the main window on the conversation list, with nothing open."
             }
             return args(
@@ -569,20 +604,28 @@ enum class VoiceTool(val wire: String) {
                 if (confirmed) VoicePlan.Call(args("sessionId" to s.id)) else VoicePlan.Confirm("Stop the agent of \"${s.title}\".")
             }
             READ_SCREEN -> VoicePlan.ReadScreen
-            SHOW_CONVERSATION -> session()?.let { VoicePlan.Show(ScreenAction.Conversation(it.id, (input["own_panel"] as? JsonPrimitive)?.booleanOrNull == true)) } ?: unknown
+            SHOW_CONVERSATION -> session()?.let { VoicePlan.Show(ScreenAction.Conversation(it.id, (input["own_panel"] as? JsonPrimitive)?.booleanOrNull != false)) } ?: unknown
             SHOW_PREVIEW -> {
                 val s = session() ?: return unknown
                 if (s.serveUrl == null) VoicePlan.Refuse("That conversation serves nothing right now; ▶ Run has to be started first.") else VoicePlan.Show(ScreenAction.Preview(s.id))
             }
-            SHOW_PULL_REQUEST -> {
+            SHOW_PULL_REQUEST, SHOW_DIFF -> {
                 // "This pull request" is the one on screen, or the one of the conversation on screen.
                 val n = number("number") ?: context.pullOnScreen?.second ?: context.onScreen?.pullNumber
                     ?: return VoicePlan.Refuse("number is missing, and nothing on screen has a pull request.")
-                val view = text("view")?.takeIf { v -> v != "overview" }
-                val browser = view == "files" || (input["in_browser"] as? JsonPrimitive)?.booleanOrNull == true
+                val view = if (this == SHOW_DIFF) "files" else text("view")?.takeIf { v -> v != "overview" }
+                val browser = (input["in_browser"] as? JsonPrimitive)?.booleanOrNull == true
                 val pick = if (named == null && number("number") == null) context.pullOnScreen?.first else null
-                pick?.let { VoicePlan.Show(ScreenAction.PullRequest(it, n, view, browser)) } ?: inRepo { VoicePlan.Show(ScreenAction.PullRequest(it, n, view, browser)) }
+                fun action(repo: String) = VoicePlan.Show(if (view == "files" && !browser) ScreenAction.Diff(repo, n, text("file")) else ScreenAction.PullRequest(repo, n, view, browser))
+                pick?.let(::action) ?: inRepo(::action)
             }
+            ARRANGE_PANEL -> when (val move = SpaceMove.of(text("move"))) {
+                null -> VoicePlan.Refuse("move must be one of ${SpaceMove.entries.joinToString { it.wire }}.")
+                SpaceMove.RESET -> VoicePlan.Show(ScreenAction.Arrange(null, move))
+                else -> text("panel")?.let { VoicePlan.Show(ScreenAction.Arrange(it.lowercase().takeIf { k -> k in PANEL_NAMES } ?: it, move)) }
+                    ?: VoicePlan.Refuse("panel is missing. Call read_screen to see the panels.")
+            }
+            SET_SURROUNDINGS -> Surroundings.of(text("surroundings"))?.let { VoicePlan.Show(ScreenAction.Surround(it)) } ?: VoicePlan.Refuse("surroundings must be passthrough or virtual.")
             SHOW_PULL_REQUESTS -> {
                 val repo = if (named == null) context.pullOnScreen?.first else null
                 repo?.let { VoicePlan.Show(ScreenAction.PullRequests(it)) } ?: inRepo { VoicePlan.Show(ScreenAction.PullRequests(it)) }
@@ -685,6 +728,9 @@ enum class VoiceTool(val wire: String) {
     }
 
     companion object {
+        /** The panels the voice names by kind rather than by a conversation's id, in any case. */
+        private val PANEL_NAMES = SpacePanel.KINDS.toSet() + "front"
+
         fun of(wire: String): VoiceTool? = entries.firstOrNull { it.wire == wire }
     }
 }

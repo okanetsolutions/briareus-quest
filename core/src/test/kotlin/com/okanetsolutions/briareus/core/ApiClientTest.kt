@@ -76,6 +76,16 @@ class ApiClientTest {
         assertEquals("GET", server.requests.last().method)
     }
 
+    @Test fun readsAPullRequestsFilesPinnedToOneRevision() = runTest {
+        server.reply(body = """{"pr":{"headSha":"h1","baseSha":"b1"},"files":[{"filename":"a.kt"}],"nextPage":2}""")
+        server.reply(body = """{"pr":{"headSha":"h1","baseSha":"b1"},"files":[{"filename":"b.kt"}],"nextPage":3}""")
+        val read = client.pullFiles("acme/api", 7, pages = 2)
+        assertEquals(listOf("a.kt", "b.kt"), read.files.map { it.path })
+        assertTrue(read.more)
+        assertEquals("https://b.example/api/v1/pulls/7/files?repo=acme%2Fapi", server.requests[0].url.toString())
+        assertEquals("https://b.example/api/v1/pulls/7/files?repo=acme%2Fapi&page=2&headSha=h1&baseSha=b1", server.requests[1].url.toString())
+    }
+
     @Test fun writesSendJsonBodies() = runTest {
         server.reply(body = """{"session":{"id":"s"}}""")
         client.call("message", args("sessionId" to "s", "text" to "hi", "attachments" to listOf("u1")))

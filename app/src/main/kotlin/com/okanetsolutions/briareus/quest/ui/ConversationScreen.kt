@@ -1,7 +1,5 @@
 package com.okanetsolutions.briareus.quest.ui
 
-import android.content.Intent
-import androidx.core.net.toUri
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -34,10 +32,8 @@ import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Stop
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
@@ -67,6 +63,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.okanetsolutions.briareus.core.ApiClient
@@ -181,7 +178,7 @@ fun ConversationScreen(store: Store, sessionId: String, onBack: (() -> Unit)?, o
     }
 
     if (confirmDelete) {
-        AlertDialog(
+        PanelAlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text("Delete this conversation?") },
             text = { Text("Its workspace is released and its transcript deleted on the server. This cannot be undone.") },
@@ -203,11 +200,11 @@ private fun Header(
     onDelete: () -> Unit, onReload: () -> Unit,
 ) {
     val p = LocalPalette.current
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var menu by remember { mutableStateOf(false) }
     fun act(name: String, vararg extra: Pair<String, Any?>) = scope.launch { store.mutate(name, args("sessionId" to session.id, *extra)) }
-    fun open(url: String) = runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)) }
+    val uri = LocalUriHandler.current
+    fun open(url: String) = runCatching { uri.openUri(url) }
 
     Row(Modifier.fillMaxWidth().background(p.sidebar).padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back", tint = p.ink) }
@@ -230,10 +227,10 @@ private fun Header(
         if (onPopOut != null) IconButton(onClick = onPopOut) { Icon(Icons.AutoMirrored.Outlined.OpenInNew, "Open in its own window", tint = p.muted) }
         Box {
             IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "More", tint = p.muted) }
-            DropdownMenu(menu, onDismissRequest = { menu = false }) {
+            PanelMenu(menu, onDismissRequest = { menu = false }) {
                 fun item(text: String, enabled: Boolean = true, action: () -> Unit) =
                     @Composable { DropdownMenuItem(text = { Text(text) }, enabled = enabled, onClick = { menu = false; action() }) }
-                session.serveUrl?.let { url -> item("Open ▶ Run in the browser") { open(url) }() }
+                session.serveUrl?.let { url -> item("Open ▶ Run") { open(url) }() }
                 session.pullUrl?.let { url -> item("Open the pull request") { open(url) }() }
                 if (store.can("review_loop")) item(if (session.reviewLoopOn) "Turn the review loop off" else "Turn the review loop on") {
                     act("review_loop", "on" to !session.reviewLoopOn)
@@ -358,7 +355,7 @@ private fun TriageCard(store: Store, session: Session, triage: Triage) {
     }
     if (confirm) {
         val fixes = triage.fixes(chosen)
-        AlertDialog(
+        PanelAlertDialog(
             onDismissRequest = { confirm = false },
             title = {
                 val plural = if (fixes == 1) "" else "s"

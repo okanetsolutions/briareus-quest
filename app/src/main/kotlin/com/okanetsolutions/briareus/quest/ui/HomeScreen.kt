@@ -23,10 +23,10 @@ import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.GraphicEq
+import androidx.compose.material.icons.outlined.Landscape
 import androidx.compose.material.icons.automirrored.outlined.MergeType
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -78,9 +78,12 @@ fun HomeScreen(
     onStatusWindow: () -> Unit,
     voiceOn: Boolean,
     onVoiceWindow: () -> Unit,
+    virtual: Boolean,
+    onSurroundings: () -> Unit,
+    onRecenter: () -> Unit,
     onBackgroundAlerts: (Boolean) -> Unit,
 ) {
-    val header = SidebarHeader(onStatusWindow, voiceOn, onVoiceWindow, onBackgroundAlerts)
+    val header = SidebarHeader(onStatusWindow, voiceOn, onVoiceWindow, virtual, onSurroundings, onRecenter, onBackgroundAlerts)
     val p = LocalPalette.current
     BoxWithConstraints(Modifier.fillMaxSize().background(p.canvas)) {
         if (maxWidth >= 900.dp) {
@@ -110,8 +113,11 @@ private fun Detail(store: Store, pane: Pane, onPane: (Pane?) -> Unit, onPopOut: 
     }
 }
 
-/** What the sidebar's header opens: the status panel, the voice panel and the settings. */
-private class SidebarHeader(val onStatusWindow: () -> Unit, val voiceOn: Boolean, val onVoiceWindow: () -> Unit, val onBackgroundAlerts: (Boolean) -> Unit)
+/** What the sidebar's header opens: the status panel, the voice panel, the surroundings and the settings. */
+private class SidebarHeader(
+    val onStatusWindow: () -> Unit, val voiceOn: Boolean, val onVoiceWindow: () -> Unit,
+    val virtual: Boolean, val onSurroundings: () -> Unit, val onRecenter: () -> Unit, val onBackgroundAlerts: (Boolean) -> Unit,
+)
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -137,7 +143,10 @@ private fun Sidebar(
                 Icon(Icons.Outlined.GraphicEq, if (header.voiceOn) "Voice conversation on" else "Talk to Briareus", tint = if (header.voiceOn) p.accent else p.muted)
             }
             IconButton(onClick = header.onStatusWindow) { Icon(Icons.Outlined.Dashboard, "Open the status panel", tint = p.muted) }
-            SettingsMenu(store, header.onBackgroundAlerts)
+            IconButton(onClick = header.onSurroundings) {
+                Icon(if (header.virtual) Icons.Outlined.Landscape else Icons.Outlined.Visibility, if (header.virtual) "Show my room" else "Show the virtual surroundings", tint = p.muted)
+            }
+            SettingsMenu(store, header.onRecenter, header.onBackgroundAlerts)
         }
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).background(p.accent, RoundedCornerShape(10.dp))
@@ -215,7 +224,7 @@ private fun SessionRow(s: Session, selected: Boolean, now: Instant, onClick: () 
 }
 
 @Composable
-private fun SettingsMenu(store: Store, onBackgroundAlerts: (Boolean) -> Unit) {
+private fun SettingsMenu(store: Store, onRecenter: () -> Unit, onBackgroundAlerts: (Boolean) -> Unit) {
     val p = LocalPalette.current
     val connection by store.connection.collectAsState()
     var open by remember { mutableStateOf(false) }
@@ -223,7 +232,7 @@ private fun SettingsMenu(store: Store, onBackgroundAlerts: (Boolean) -> Unit) {
     var confirmForget by remember { mutableStateOf<Boolean?>(null) }
     Box {
         IconButton(onClick = { open = true }) { Icon(Icons.Outlined.Settings, "Settings", tint = p.muted) }
-        DropdownMenu(open, onDismissRequest = { open = false }) {
+        PanelMenu(open, onDismissRequest = { open = false }) {
             connection?.let { c ->
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                     Text(c.device.label.ifBlank { "This headset" }, style = MaterialTheme.typography.titleSmall, color = p.ink)
@@ -236,12 +245,13 @@ private fun SettingsMenu(store: Store, onBackgroundAlerts: (Boolean) -> Unit) {
                 trailingIcon = { Switch(alerts, null) },
                 onClick = { alerts = !alerts; onBackgroundAlerts(alerts) },
             )
+            DropdownMenuItem(text = { Text("Put the panels back around me") }, onClick = { open = false; onRecenter() })
             DropdownMenuItem(text = { Text("Forget this connection") }, onClick = { open = false; confirmForget = false })
             DropdownMenuItem(text = { Text("Revoke the token and forget", color = p.danger) }, onClick = { open = false; confirmForget = true })
         }
     }
     confirmForget?.let { revoke ->
-        AlertDialog(
+        PanelAlertDialog(
             onDismissRequest = { confirmForget = null },
             title = { Text(if (revoke) "Revoke this headset's token?" else "Forget this connection?") },
             text = {

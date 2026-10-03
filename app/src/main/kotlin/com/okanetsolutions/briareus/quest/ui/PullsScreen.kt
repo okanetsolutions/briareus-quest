@@ -1,7 +1,5 @@
 package com.okanetsolutions.briareus.quest.ui
 
-import android.content.Context
-import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,11 +24,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.Difference
 import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -52,10 +49,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.net.toUri
 import com.okanetsolutions.briareus.core.ApiError
 import com.okanetsolutions.briareus.core.Board
 import com.okanetsolutions.briareus.core.Errand
@@ -175,7 +171,7 @@ private fun Filter(label: String, current: String?, options: List<String>, onPic
         OutlinedButton(onClick = { open = true }, contentPadding = PaddingValues(horizontal = 14.dp)) {
             Text((current ?: "All ${label.lowercase()}s") + " ▾", color = if (current != null) p.accent else p.ink, maxLines = 1)
         }
-        DropdownMenu(open, onDismissRequest = { open = false }) {
+        PanelMenu(open, onDismissRequest = { open = false }) {
             DropdownMenuItem(text = { Text("All ${label.lowercase()}s") }, onClick = { open = false; onPick(null) })
             options.forEach { o -> DropdownMenuItem(text = { Text(o) }, onClick = { open = false; onPick(o) }) }
         }
@@ -262,7 +258,7 @@ private fun lerpToInk(c: Color, ink: Color): Color = Color(
 @Composable
 private fun PullActions(store: Store, repo: String, number: Int, recommended: String?, errands: List<Errand>, runs: List<Session>, onPane: (Pane?) -> Unit) {
     val p = LocalPalette.current
-    val context = LocalContext.current
+    val uri = LocalUriHandler.current
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
     var pending by remember { mutableStateOf<PendingAction?>(null) }
@@ -274,7 +270,7 @@ private fun PullActions(store: Store, repo: String, number: Int, recommended: St
                 when (action) {
                     PendingAction.Serve -> store.mutate("serve_pull", args("repo" to repo, "pr" to number))?.let { r ->
                         Session.parse(r["session"])?.let { onPane(Pane.Open(it.id)) }
-                        r.nonEmpty("url")?.let { openBeside(context, it) }
+                        r.nonEmpty("url")?.let { uri.openUri(it) }
                     }
                     is PendingAction.Run -> store.mutate("action", args("repo" to repo, "action" to action.errand.id, "prNumber" to number, "input" to input))
                         ?.let { r -> Session.parse(r["session"])?.let { onPane(Pane.Open(it.id)) } }
@@ -299,7 +295,7 @@ private fun PullActions(store: Store, repo: String, number: Int, recommended: St
     pending?.let { action ->
         var input by remember(action) { mutableStateOf("") }
         val errand = (action as? PendingAction.Run)?.errand
-        AlertDialog(
+        PanelAlertDialog(
             onDismissRequest = { pending = null },
             title = {
                 Text(
@@ -375,21 +371,14 @@ private fun ActionButton(text: String, enabled: Boolean, highlighted: Boolean = 
     ) { Text(text, style = MaterialTheme.typography.labelLarge) }
 }
 
-/** Opens a page in the browser beside this panel. */
-private fun openBeside(context: Context, url: String) {
-    runCatching {
-        context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT))
-    }
-}
-
 // MARK: - One pull request
 
 /** One pull request in full: where it stands, its description, checks, reviews, linked issues, commits and findings. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun PullScreen(store: Store, repo: String, number: Int, onPane: (Pane?) -> Unit) {
+fun PullScreen(store: Store, repo: String, number: Int, onPane: (Pane?) -> Unit, onDiff: (() -> Unit)? = null) {
     val p = LocalPalette.current
-    val context = LocalContext.current
+    val uri = LocalUriHandler.current
     val sessions by store.sessions.collectAsState()
     var pr by remember(repo, number) { mutableStateOf<PullOverview?>(null) }
     var body by remember(repo, number) { mutableStateOf<String?>(null) }
@@ -421,8 +410,12 @@ fun PullScreen(store: Store, repo: String, number: Int, onPane: (Pane?) -> Unit)
         Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 12.dp, top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = { onPane(Pane.Pulls(repo)) }) { Text("← Pull requests") }
             Box(Modifier.weight(1f))
+            if (onDiff != null && store.can("pull_files")) TextButton(onClick = onDiff) {
+                Icon(Icons.Outlined.Difference, null, Modifier.size(18.dp))
+                Text("Diff", Modifier.padding(start = 6.dp))
+            }
             pr?.url?.let { url ->
-                TextButton(onClick = { openBeside(context, url) }) {
+                TextButton(onClick = { uri.openUri(url) }) {
                     Icon(Icons.AutoMirrored.Outlined.OpenInNew, null, Modifier.size(18.dp))
                     Text("GitHub", Modifier.padding(start = 6.dp))
                 }
@@ -456,7 +449,7 @@ fun PullScreen(store: Store, repo: String, number: Int, onPane: (Pane?) -> Unit)
                     if (o.checks.isEmpty()) Text("No checks reported.", color = p.muted)
                     o.checks.forEach { c ->
                         Row(
-                            Modifier.fillMaxWidth().clickable(enabled = c.url != null) { c.url?.let { openBeside(context, it) } }.padding(vertical = 4.dp),
+                            Modifier.fillMaxWidth().clickable(enabled = c.url != null) { c.url?.let { uri.openUri(it) } }.padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Dot(if (c.failed) p.danger else if (c.passed) p.ok else if (c.pending) p.warn else p.muted)
@@ -478,7 +471,7 @@ fun PullScreen(store: Store, repo: String, number: Int, onPane: (Pane?) -> Unit)
                     Section("Findings") {
                         if (list.isEmpty()) Text("No findings reported.", color = p.muted)
                         list.forEach { f ->
-                            Column(Modifier.fillMaxWidth().clickable(enabled = f.url != null) { f.url?.let { openBeside(context, it) } }.padding(vertical = 6.dp)) {
+                            Column(Modifier.fillMaxWidth().clickable(enabled = f.url != null) { f.url?.let { uri.openUri(it) } }.padding(vertical = 6.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(f.severity.uppercase(), style = MaterialTheme.typography.labelSmall, color = if (f.severity == "critical" || f.severity == "high") p.danger else p.warn)
                                     Text(f.title, Modifier.weight(1f).padding(start = 8.dp), style = MaterialTheme.typography.bodyMedium, color = p.ink)
@@ -493,7 +486,7 @@ fun PullScreen(store: Store, repo: String, number: Int, onPane: (Pane?) -> Unit)
                 }
                 if (o.issues.isNotEmpty()) Section("Closes") {
                     o.issues.forEach { i ->
-                        Row(Modifier.fillMaxWidth().clickable(enabled = i.url != null) { i.url?.let { openBeside(context, it) } }.padding(vertical = 4.dp)) {
+                        Row(Modifier.fillMaxWidth().clickable(enabled = i.url != null) { i.url?.let { uri.openUri(it) } }.padding(vertical = 4.dp)) {
                             Text("#${i.number}", style = MaterialTheme.typography.labelLarge, color = p.muted)
                             Text(i.title, Modifier.weight(1f).padding(start = 8.dp), style = MaterialTheme.typography.bodyMedium, color = p.ink)
                             Text(i.state, style = MaterialTheme.typography.labelSmall, color = if (i.state == "open") p.ok else p.muted)
@@ -502,7 +495,7 @@ fun PullScreen(store: Store, repo: String, number: Int, onPane: (Pane?) -> Unit)
                 }
                 if (o.commits.isNotEmpty()) Section("Commits") {
                     o.commits.forEach { c ->
-                        Row(Modifier.fillMaxWidth().clickable(enabled = c.url != null) { c.url?.let { openBeside(context, it) } }.padding(vertical = 3.dp)) {
+                        Row(Modifier.fillMaxWidth().clickable(enabled = c.url != null) { c.url?.let { uri.openUri(it) } }.padding(vertical = 3.dp)) {
                             Text(c.sha.take(7), style = MaterialTheme.typography.labelMedium.copy(fontFamily = Mono), color = p.muted)
                             Text(c.message, Modifier.padding(start = 10.dp), style = MaterialTheme.typography.bodySmall, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }

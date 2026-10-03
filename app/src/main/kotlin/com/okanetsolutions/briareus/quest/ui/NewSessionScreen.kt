@@ -18,7 +18,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -130,7 +129,7 @@ private fun <T> Picker(label: String, current: String, options: List<Pair<String
     var open by remember { mutableStateOf(false) }
     Box {
         AssistChip(onClick = { open = true }, label = { Text("$label: $current") }, shape = RoundedCornerShape(50))
-        DropdownMenu(open, onDismissRequest = { open = false }) {
+        PanelMenu(open, onDismissRequest = { open = false }) {
             options.forEach { (text, value) -> DropdownMenuItem(text = { Text(text) }, onClick = { open = false; onPick(value) }) }
         }
     }

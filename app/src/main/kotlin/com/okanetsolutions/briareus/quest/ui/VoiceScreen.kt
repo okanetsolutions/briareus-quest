@@ -27,9 +27,7 @@ import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.MicOff
 import androidx.compose.material.icons.outlined.Tune
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -196,7 +194,7 @@ fun VoiceSettingsDialog(settings: VoiceSettings, onDismiss: () -> Unit) {
     val idle by settings.idleMinutes.collectAsState()
     var key by remember { mutableStateOf("") }
     var voices by remember { mutableStateOf(false) }
-    AlertDialog(
+    PanelAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Voice") },
         text = {
@@ -220,7 +218,7 @@ fun VoiceSettingsDialog(settings: VoiceSettings, onDismiss: () -> Unit) {
                     Text("Voice", Modifier.weight(1f), color = p.ink)
                     Box {
                         TextButton(onClick = { voices = true }) { Text(voice.replaceFirstChar { it.uppercase() }) }
-                        DropdownMenu(voices, onDismissRequest = { voices = false }) {
+                        PanelMenu(voices, onDismissRequest = { voices = false }) {
                             Voice.VOICES.forEach { v ->
                                 DropdownMenuItem(text = { Text(v.replaceFirstChar { it.uppercase() }) }, onClick = { settings.setVoice(v); voices = false })
                             }
@@ -267,6 +265,9 @@ private val VoiceSession.Step.title: String
             VoiceTool.SHOW_PREVIEW -> "Show the running app"
             VoiceTool.SHOW_NEW_CONVERSATION -> "Show the new conversation form"
             VoiceTool.SHOW_STATUS_PANEL -> "Show the status panel"
+            VoiceTool.SHOW_DIFF -> "Show the diff" + (n("number").takeIf { it.isNotEmpty() }?.let { " of #$it" } ?: "") + (s("file").takeIf { it.isNotEmpty() }?.let { " at $it" } ?: "")
+            VoiceTool.ARRANGE_PANEL -> if (s("move") == "reset") "Put the panels back" else "Move the ${s("panel").ifEmpty { "panel" }}: ${s("move")}"
+            VoiceTool.SET_SURROUNDINGS -> if (s("surroundings") == "virtual") "Show the virtual surroundings" else "Show the room"
             VoiceTool.GO_HOME -> "Show the conversation list"
             null -> name
         }

@@ -10,6 +10,7 @@ lifecycle = "2.9.2"
 coreKtx = "1.19.1"
 junit = "4.13.2"
 detekt = "1.23.8"
+spatial = "0.14.0"
 
 [libraries]
 coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -30,6 +31,11 @@ compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
 compose-foundation = { module = "androidx.compose.foundation:foundation" }
 compose-material3 = { module = "androidx.compose.material3:material3" }
 compose-material-icons = { module = "androidx.compose.material:material-icons-extended" }
+spatial-sdk = { module = "com.meta.spatial:meta-spatial-sdk", version.ref = "spatial" }
+spatial-toolkit = { module = "com.meta.spatial:meta-spatial-sdk-toolkit", version.ref = "spatial" }
+spatial-vr = { module = "com.meta.spatial:meta-spatial-sdk-vr", version.ref = "spatial" }
+spatial-isdk = { module = "com.meta.spatial:meta-spatial-sdk-isdk", version.ref = "spatial" }
+spatial-compose = { module = "com.meta.spatial:meta-spatial-sdk-compose", version.ref = "spatial" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

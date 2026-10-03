@@ -16,7 +16,7 @@ class BriareusApp : Application() {
     override fun onCreate() {
         super.onCreate()
         store = Store(this)
-        navigator = Navigator(this, store)
+        navigator = Navigator(store)
         voiceSettings = VoiceSettings(this, store)
         voice = VoiceSession(this, store, navigator, voiceSettings)
         Notifier.createChannels(this)

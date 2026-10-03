@@ -1,7 +1,7 @@
 # Working on Briareus for Quest
 
-A Meta Quest client for [Briareus](https://github.com/nadinyamaui/briareus): Kotlin, Jetpack Compose, 2D panels on
-Horizon OS, talking to a server's `/api/v1` with a per-device token. The README says what the app does; this page says
+A Meta Quest client for [Briareus](https://github.com/nadinyamaui/briareus): Kotlin, Jetpack Compose, an immersive Meta
+Spatial SDK space on Horizon OS, talking to a server's `/api/v1` with a per-device token. The README says what the app does; this page says
 how the code is arranged and what a change must respect. The skills under `.claude/skills/` go deeper per topic.
 
 ## Build and check
@@ -20,8 +20,8 @@ pass all of it, and every pull request merged into `main` is released automatica
 
 | Path | Contents |
 | --- | --- |
-| `core/` | Portable Kotlin, **no Android**: `ApiClient` (the `/api/v1` client over OkHttp), `Routes` (the one table of the calls the app makes and their routes), `RouteCatalog` and `Permission` (what the server has and the token may call), `Models`, `Sse`, `SessionList`, `AttentionTracker` (which changes notify), `Markdown`, `Triage`, `Pulls`, and `Voice` (the voice mode's tools, read-back rules and cost). Tested on the JVM in `core/src/test`. |
-| `app/` | The Android app: `Vault` (Keystore-sealed token) and `ResponseCache`, `Store` (the connection and everything read through it, shared by every window and the service), `Conversation` (one transcript stream), `EventsService` and `Notifier` (background notifications with direct reply, `ReplyReceiver`), `VoiceRecorder`, the voice conversation (`RealtimeCall`, `VoiceSession`, `VoiceService`, `VoiceSettings`) and the `Navigator` it drives the main window through, `Windows` and `Activities` (the four panels), and the Compose screens under `ui/`. |
+| `core/` | Portable Kotlin, **no Android**: `ApiClient` (the `/api/v1` client over OkHttp), `Routes` (the one table of the calls the app makes and their routes), `RouteCatalog` and `Permission` (what the server has and the token may call), `Models`, `Sse`, `SessionList`, `AttentionTracker` (which changes notify), `Markdown`, `Triage`, `Pulls`, `Diff` (a pull request's files and their lines), `Space` (the panels' layout around the user and the moves the voice can ask for), and `Voice` (the voice mode's tools, read-back rules and cost). Tested on the JVM in `core/src/test`. |
+| `app/` | The Android app: `Vault` (Keystore-sealed token) and `ResponseCache`, `Store` (the connection and everything read through it, shared by every window and the service), `Conversation` (one transcript stream), `EventsService` and `Notifier` (background notifications with direct reply, `ReplyReceiver`), `VoiceRecorder`, the voice conversation (`RealtimeCall`, `VoiceSession`, `VoiceService`, `VoiceSettings`) and the `Navigator` that holds the space (which panels float where, the main window's pane, the surroundings) for the voice and the screens alike, `Activities` (the immersive `MainActivity` that draws the space as Spatial SDK panel entities), `Windows` (the intents notifications open it with), and the Compose screens under `ui/`. |
 | `config/detekt/` | The detekt configuration; `.editorconfig` holds the formatting rules. |
 | `.github/` | CI (build, test, lint, formatting, workflow lint), CodeQL, dependency graph and review, the release workflow, Dependabot, templates. |
 
@@ -42,8 +42,9 @@ pass all of it, and every pull request merged into `main` is released automatica
   `gradle/libs.versions.toml`; Dependabot proposes updates monthly.
 - **Match the dashboard.** Labels, colours, type and behaviour follow the web app and the Windows client where they
   overlap. When the server changes a route, the web dashboard shows the intended behaviour.
-- **Think in panels.** Every window has to work beside YouTube or a chat, at a metre or more, with a pointer instead of a
-  finger: large type, pointer-sized targets, nothing that depends on a touch gesture.
+- **Think in panels in a space.** Every panel floats a metre or two away and is used with a pointer or by voice: large
+  type, pointer-sized targets, nothing that depends on a touch gesture. Whatever a panel shows, the voice must be able to
+  show, move and close too (`SpaceLayout` in the core, `Navigator` in the app).
 
 ## Style
 

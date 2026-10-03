@@ -13,8 +13,8 @@ adb devices                                  # the Quest shows as a serial; "una
 adb tcpip 5555 && adb connect <headset-ip>   # once over USB, then unplug; the IP is in Settings → Wi-Fi
 ./gradlew installDebug                       # build and install the debug APK
 adb shell am start -n com.okanetsolutions.briareus.quest/.MainActivity
-adb shell am start -n com.okanetsolutions.briareus.quest/.StatusActivity         # the narrow status panel
-adb shell am start -n com.okanetsolutions.briareus.quest/.ConversationActivity -d briareus://session/<id>
+adb shell am start -n com.okanetsolutions.briareus.quest/.MainActivity --es panel status              # bring the status panel forward
+adb shell am start -n com.okanetsolutions.briareus.quest/.MainActivity --es panel conversation --es session <id>
 ```
 
 Watch and capture:
@@ -22,12 +22,12 @@ Watch and capture:
 ```sh
 adb logcat --pid=$(adb shell pidof com.okanetsolutions.briareus.quest)           # the app's log only
 adb logcat -s AndroidRuntime:E                                                    # crashes
-adb exec-out screencap -p > shot.png                                              # what the panel shows
 adb shell dumpsys notification --noredact | grep -A12 briareus                    # posted notifications
 ```
 
-A headset screenshot captures the whole view; the in-headset capture (Oculus button + trigger) is fine too, and it saves
-under `/sdcard/Oculus/Screenshots/` to `adb pull`.
+`adb exec-out screencap` comes back empty for the immersive space; use the in-headset capture (Meta button + trigger),
+which saves under `/sdcard/Oculus/Screenshots/` to `adb pull`. The scene only renders while the headset is worn: with it
+asleep, the log shows `Renderer: ErrorNotReady`, and that is not a fault.
 
 ## Exercising the notifications
 

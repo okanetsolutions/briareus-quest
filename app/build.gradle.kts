@@ -71,6 +71,13 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.compose.material.icons)
     implementation(libs.compose.ui.tooling.preview)
+    // The immersive space: OpenXR, panels as entities, passthrough and the skybox. Meta's Gradle plugin is left out, as
+    // it serves the Spatial Editor and hot reload, neither of which the app uses.
+    implementation(libs.spatial.sdk)
+    implementation(libs.spatial.toolkit)
+    implementation(libs.spatial.vr)
+    implementation(libs.spatial.isdk)
+    implementation(libs.spatial.compose)
     debugImplementation(libs.compose.ui.tooling)
     testImplementation(libs.junit)
 }

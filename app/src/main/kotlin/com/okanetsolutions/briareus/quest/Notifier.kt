@@ -52,10 +52,7 @@ object Notifier {
             context, 0, Intent(context, VoiceService::class.java).setAction(VoiceService.ACTION_END),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        val open = PendingIntent.getActivity(
-            context, 1, Intent(context, VoiceActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
+        val open = Windows.voice(context)
         return NotificationCompat.Builder(context, CHANNEL_VOICE)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Talking with Briareus")
@@ -87,9 +84,9 @@ object Notifier {
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
-            .setContentIntent(ConversationActivity.pendingIntent(context, alert.sessionId))
+            .setContentIntent(Windows.conversation(context, alert.sessionId))
         if (alert.repliable && context.store.can("message")) {
-            builder.addAction(R.drawable.ic_notification, "Reply by voice", ConversationActivity.pendingIntent(context, alert.sessionId))
+            builder.addAction(R.drawable.ic_notification, "Reply by voice", Windows.conversation(context, alert.sessionId))
             // The agent's own options as one-tap answers, for a headset where typing is slow.
             for ((index, option) in options.take(2).withIndex()) {
                 builder.addAction(R.drawable.ic_notification, option, ReplyReceiver.pendingIntent(context, alert.sessionId, option, index + 1))
@@ -111,7 +108,7 @@ object Notifier {
             .setSilent(true)
             .setAutoCancel(true)
             .setTimeoutAfter(if (error == null) 4_000 else 0)
-            .setContentIntent(ConversationActivity.pendingIntent(context, sessionId))
+            .setContentIntent(Windows.conversation(context, sessionId))
             .build()
         notify(context, sessionId, n)
     }
@@ -131,10 +128,7 @@ object Notifier {
         }
     }
 
-    private fun openStatus(context: Context): PendingIntent = PendingIntent.getActivity(
-        context, 0, Intent(context, StatusActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-    )
+    private fun openStatus(context: Context): PendingIntent = Windows.status(context)
 
     private const val ID_ALERT = 2
 }
