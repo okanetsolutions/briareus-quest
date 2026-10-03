@@ -27,6 +27,8 @@ reaches it. Every button or menu item that writes is gated by it. See the `api-c
 **Security defaults, in `ApiClient.defaultHttpClient()` and `Vault`.** HTTPS only (TLS 1.2+), system CAs only, no
 cookies, no cache, `followRedirects(false)`, no retry on connection failure, the token sealed with AES-GCM under a
 Keystore key and only ever sent to the paired origin. Do not open any of these, and do not add a network destination.
+The one other destination is OpenAI's Realtime API, which `RealtimeCall` opens only while the user holds a voice
+conversation, under the user's own key; see the security rule in `AGENTS.md`.
 
 **Dependencies.** Add one only when the platform has nothing that does the job; the UI uses Compose and the standard
 library and the core uses OkHttp and serialization. Everything is in `gradle/libs.versions.toml`.
