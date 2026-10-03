@@ -34,14 +34,15 @@ object Routes {
         // Pull requests
         ApiRoute("pulls", "GET", "pulls"),
         ApiRoute("pull", "GET", "pulls/{pr}"),
+        ApiRoute("pull_description", "GET", "pulls/{pr}/description"),
         ApiRoute("findings", "GET", "pulls/{pr}/findings"),
         ApiRoute("merge_pull", "POST", "pulls/{pr}/merge"),
+        ApiRoute("serve_pull", "POST", "pulls/{pr}/serve"),
         // Sessions. The list has no project parameter: a `repo` argument cuts the answer down here instead.
         ApiRoute("sessions", "GET", "sessions", filter = "repo", list = "sessions"),
         ApiRoute("start_session", "POST", "sessions"),
         ApiRoute("session", "GET", "sessions/{sessionId}"),
         ApiRoute("session_events", "GET", "sessions/{sessionId}/events"),
-        ApiRoute("rename", "PATCH", "sessions/{sessionId}"),
         ApiRoute("delete", "DELETE", "sessions/{sessionId}"),
         ApiRoute("message", "POST", "sessions/{sessionId}/messages"),
         ApiRoute("drop_message", "DELETE", "sessions/{sessionId}/queue/{index}"),

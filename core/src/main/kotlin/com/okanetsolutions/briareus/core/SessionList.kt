@@ -12,19 +12,18 @@ data class ProjectGroup(val project: Project, val sessions: List<Session>) {
 object SessionList {
     /**
      * The projects in the server's order, each with its conversations, newest first, minus orchestrator workers (shown
-     * under their orchestrator instead). [query] narrows by title, branch or project; a project left with nothing is
-     * dropped unless nothing is being searched for.
+     * under their orchestrator instead).
      */
-    fun group(projects: List<Project>, sessions: List<Session>, query: String = ""): List<ProjectGroup> {
-        val q = query.trim().lowercase()
+    fun group(projects: List<Project>, sessions: List<Session>): List<ProjectGroup> {
         val byRepo = sessions.filter { it.parentId == null }.groupBy { it.repo }
-        return projects.mapNotNull { project ->
-            val mine = byRepo[project.repo].orEmpty()
-                .filter { q.isEmpty() || matches(it, project, q) }
-                .sortedByDescending { it.createdAt ?: Instant.EPOCH }
-            if (q.isNotEmpty() && mine.isEmpty() && !project.title.lowercase().contains(q)) null else ProjectGroup(project, mine)
+        return projects.map { project ->
+            ProjectGroup(project, byRepo[project.repo].orEmpty().sortedByDescending { it.createdAt ?: Instant.EPOCH })
         }
     }
+
+    /** A project's conversations about pull request [number], newest first: the board's "runs". */
+    fun forPull(sessions: Collection<Session>, repo: String, number: Int): List<Session> =
+        sessions.filter { it.repo == repo && it.pullNumber == number }.sortedByDescending { it.createdAt ?: Instant.EPOCH }
 
     /** Every conversation waiting for its user, the longest-waiting first: the status panel's list. */
     fun needingYou(sessions: List<Session>): List<Session> =
@@ -52,7 +51,4 @@ object SessionList {
 
     /** "$0.42", or null when the provider does not price turns. */
     fun cost(usd: Double?): String? = usd?.let { if (it < 0.01 && it > 0) "<$0.01" else "$" + "%.2f".format(java.util.Locale.ROOT, it) }
-
-    private fun matches(s: Session, p: Project, q: String): Boolean =
-        s.title.lowercase().contains(q) || s.branch?.lowercase()?.contains(q) == true || p.title.lowercase().contains(q)
 }

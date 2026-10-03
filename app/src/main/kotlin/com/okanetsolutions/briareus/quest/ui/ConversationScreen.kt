@@ -32,10 +32,8 @@ import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Stop
-import androidx.compose.material.icons.outlined.StopCircle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -48,7 +46,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -73,7 +70,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.okanetsolutions.briareus.core.ApiClient
-import com.okanetsolutions.briareus.core.Discovery
 import com.okanetsolutions.briareus.core.Session
 import com.okanetsolutions.briareus.core.SessionList
 import com.okanetsolutions.briareus.core.TranscriptEvent
@@ -81,7 +77,6 @@ import com.okanetsolutions.briareus.core.Triage
 import com.okanetsolutions.briareus.core.args
 import com.okanetsolutions.briareus.quest.Notifier
 import com.okanetsolutions.briareus.quest.Store
-import com.okanetsolutions.briareus.quest.VoiceRecorder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -124,7 +119,8 @@ fun ConversationScreen(store: Store, sessionId: String, onBack: (() -> Unit)?, o
     val session = sessions[sessionId]
     val events by conversation.events.collectAsState()
     val loading by conversation.loading.collectAsState()
-    val connection by store.connection.collectAsState()
+    // What the token may do, and whether the server transcribes, is read from the connection: recompose when it changes.
+    store.connection.collectAsState()
 
     DisposableEffect(sessionId) {
         val release = conversation.watch()
@@ -144,10 +140,9 @@ fun ConversationScreen(store: Store, sessionId: String, onBack: (() -> Unit)?, o
     }
 
     var confirmDelete by remember { mutableStateOf(false) }
-    var renaming by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize().background(p.canvas)) {
-        Header(store, session, onBack, onPopOut, onRename = { renaming = true }, onDelete = { confirmDelete = true }, onReload = conversation::reload)
+        Header(store, session, onBack, onPopOut, onDelete = { confirmDelete = true }, onReload = conversation::reload)
         HorizontalDivider(color = p.line)
 
         val rows = remember(events) { rows(events) }
@@ -182,7 +177,7 @@ fun ConversationScreen(store: Store, sessionId: String, onBack: (() -> Unit)?, o
         }
 
         Queue(store, session)
-        Composer(store, session, voiceOff = if (store.can("transcribe")) Discovery.voiceNotesOff(connection?.transcribe) else "")
+        Composer(store, session)
     }
 
     if (confirmDelete) {
@@ -199,28 +194,13 @@ fun ConversationScreen(store: Store, sessionId: String, onBack: (() -> Unit)?, o
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
         )
     }
-    if (renaming) {
-        var title by remember { mutableStateOf(session.title) }
-        AlertDialog(
-            onDismissRequest = { renaming = false },
-            title = { Text("Rename") },
-            text = { OutlinedTextField(title, { title = it }, singleLine = true, modifier = Modifier.fillMaxWidth()) },
-            confirmButton = {
-                TextButton(enabled = title.isNotBlank(), onClick = {
-                    renaming = false
-                    scope.launch { store.mutate("rename", args("sessionId" to sessionId, "title" to title.trim())) }
-                }) { Text("Save") }
-            },
-            dismissButton = { TextButton(onClick = { renaming = false }) { Text("Cancel") } },
-        )
-    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Header(
     store: Store, session: Session, onBack: (() -> Unit)?, onPopOut: (() -> Unit)?,
-    onRename: () -> Unit, onDelete: () -> Unit, onReload: () -> Unit,
+    onDelete: () -> Unit, onReload: () -> Unit,
 ) {
     val p = LocalPalette.current
     val context = LocalContext.current
@@ -253,7 +233,6 @@ private fun Header(
             DropdownMenu(menu, onDismissRequest = { menu = false }) {
                 fun item(text: String, enabled: Boolean = true, action: () -> Unit) =
                     @Composable { DropdownMenuItem(text = { Text(text) }, enabled = enabled, onClick = { menu = false; action() }) }
-                item("Rename", store.can("rename"), onRename)()
                 session.serveUrl?.let { url -> item("Open ▶ Run in the browser") { open(url) }() }
                 session.pullUrl?.let { url -> item("Open the pull request") { open(url) }() }
                 if (store.can("review_loop")) item(if (session.reviewLoopOn) "Turn the review loop off" else "Turn the review loop on") {
@@ -373,7 +352,7 @@ private fun TriageCard(store: Store, session: Session, triage: Triage) {
             }
         }
         if (canDecide) {
-            if (triage.mine) OutlinedTextField(note, { note = it }, Modifier.fillMaxWidth(), placeholder = { Text("A note for the pull request and the fix session (optional)") })
+            if (triage.mine) VoiceField(store, note, { note = it }, Modifier.fillMaxWidth(), placeholder = "Record a note for the pull request and the fix session (optional)", enabled = !busy)
             Button(onClick = { confirm = true }, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(triage.completeLabel(chosen)) }
         }
     }
@@ -423,7 +402,7 @@ private data class Attachment(val id: String, val name: String, val size: Long)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun Composer(store: Store, session: Session, voiceOff: String?) {
+private fun Composer(store: Store, session: Session) {
     val p = LocalPalette.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -431,10 +410,6 @@ private fun Composer(store: Store, session: Session, voiceOff: String?) {
     val attachments = remember(session.id) { mutableStateListOf<Attachment>() }
     var sending by remember { mutableStateOf(false) }
     var uploading by remember { mutableIntStateOf(0) }
-    var transcribing by remember { mutableStateOf(false) }
-    val recorder = remember { VoiceRecorder(context) }
-    var recording by remember { mutableStateOf(false) }
-    DisposableEffect(Unit) { onDispose { recorder.stopQuietly() } }
 
     if (!store.can("message")) {
         Text(
@@ -467,10 +442,6 @@ private fun Composer(store: Store, session: Session, voiceOff: String?) {
             }
         }
     }
-    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) runCatching { recorder.start(); recording = true }.onFailure { store.failed(Exception("The microphone could not start.")) }
-    }
-
     fun send() {
         val body = text.trim()
         if ((body.isEmpty() && attachments.isEmpty()) || sending) return
@@ -478,26 +449,6 @@ private fun Composer(store: Store, session: Session, voiceOff: String?) {
         scope.launch {
             if (store.send(session.id, body, attachments.map { it.id })) { text = ""; attachments.clear() }
             sending = false
-        }
-    }
-
-    fun toggleMic() {
-        if (recording) {
-            recording = false
-            val audio = recorder.stop() ?: return
-            transcribing = true
-            scope.launch {
-                try {
-                    val heard = store.client?.transcribe(audio, VoiceRecorder.CONTENT_TYPE).orEmpty().trim()
-                    if (heard.isNotEmpty()) text = if (text.isBlank()) heard else text.trimEnd() + " " + heard
-                } catch (e: Exception) {
-                    store.failed(e)
-                } finally {
-                    transcribing = false
-                }
-            }
-        } else {
-            micPermission.launch(android.Manifest.permission.RECORD_AUDIO)
         }
     }
 
@@ -513,29 +464,15 @@ private fun Composer(store: Store, session: Session, voiceOff: String?) {
                 if (uploading > 0) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
             }
         }
-        Row(verticalAlignment = Alignment.Bottom) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { picker.launch(arrayOf("*/*")) }, enabled = store.can("upload")) { Icon(Icons.Outlined.AttachFile, "Attach files", tint = p.muted) }
-            if (voiceOff == null) {
-                IconButton(onClick = ::toggleMic, enabled = !transcribing) {
-                    when {
-                        transcribing -> CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                        recording -> Icon(Icons.Outlined.StopCircle, "Stop recording", tint = p.danger)
-                        else -> Icon(Icons.Outlined.Mic, "Record a voice note", tint = p.muted)
-                    }
-                }
-            }
-            OutlinedTextField(
-                text, { text = it }, Modifier.weight(1f).heightIn(min = 52.dp, max = 220.dp),
-                placeholder = {
-                    Text(
-                        when {
-                            recording -> "Listening… tap ■ when you are done"
-                            session.isClosed -> "A message reopens this conversation"
-                            session.isActive && !session.liveInput -> "Queued until the turn ends"
-                            session.awaitingAnswer -> "Answer the agent"
-                            else -> "Message the agent"
-                        },
-                    )
+            VoiceField(
+                store, text, { text = it }, Modifier.weight(1f), enabled = !sending,
+                placeholder = when {
+                    session.isClosed -> "Record a message: it reopens this conversation"
+                    session.isActive && !session.liveInput -> "Record a message: it is queued until the turn ends"
+                    session.awaitingAnswer -> "Record your answer to the agent"
+                    else -> "Record a message for the agent"
                 },
             )
             Spacer(Modifier.size(8.dp))
@@ -546,7 +483,6 @@ private fun Composer(store: Store, session: Session, voiceOff: String?) {
                 if (sending) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = p.onAccent) else Icon(Icons.AutoMirrored.Outlined.Send, "Send")
             }
         }
-        voiceOff?.takeIf { it.isNotEmpty() }?.let { Text(it, Modifier.padding(top = 6.dp), style = MaterialTheme.typography.labelSmall, color = p.muted) }
     }
 }
 
