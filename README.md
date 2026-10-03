@@ -13,6 +13,7 @@ A Meta Quest client for [Briareus](https://github.com/nadinyamaui/briareus), the
 - Answers from the notification. A question or a finished turn takes one tap on the agent's own options (or Continue), sent as the conversation's next message without opening the app; Reply by voice opens the conversation to record an answer.
 - The status panel counts what is waiting, working and ready, lists every conversation waiting for you with the agent's question, its options as buttons and a voice reply, and what is working right now with the tool it is on.
 - Writes by voice, with no keyboard: everywhere you write to an agent (the composer, a new session's first message, the status panel's reply, a findings note and an errand's input), 🎙 records with the headset's microphone (AAC), the server transcribes it, and the text is shown in a read-only area to check before sending. Each note is added after the last, and ✕ clears it. On a server that cannot transcribe, the field says what the server is missing.
+- Talk to your agents and drive the windows by voice: the waveform button opens the voice panel, a spoken conversation with OpenAI's [GPT-Realtime mini](https://developers.openai.com/api/docs/models/gpt-realtime-2.1-mini) about every project the token can see. Ask what a conversation is doing, what a pull request changes or what an issue says; answer an agent, start one (or one on an issue), stop one or merge a pull request; and say "show me this pull request", "open the login conversation in its own panel", "show the web project's pull requests" or "open the status panel", and the windows follow. Anything that changes something on the server is read back and runs only on a yes heard after it (enforced by the app, not just the prompt); showing things needs no yes. Captions of both sides scroll in the panel, with what it ran and an estimate of what the conversation cost. It goes on while you look at another app and ends when you end it or after a silence (3 minutes by default). It needs your own OpenAI API key, entered in the panel's settings.
 - Large type and pointer-sized targets for a panel a metre away, in the dashboard's dark palette.
 
 **Conversations**
@@ -57,8 +58,8 @@ detekt runs on both modules, and the core (address and token rules, the API clie
 
 | Path | Contents |
 | --- | --- |
-| `core/` | The portable core: the `/api/v1` client over OkHttp (one table of the calls the app makes and their routes), server-sent events, the route catalog, models, transcript, the notification rules (`Attention.kt`), Markdown and findings. No Android code. |
-| `app/` | The Android app: the Keystore vault and encrypted response cache, the store shared by every window, the events service and notifications with direct reply, voice notes, the three windows, and the Compose screens under `ui/`. |
+| `core/` | The portable core: the `/api/v1` client over OkHttp (one table of the calls the app makes and their routes), server-sent events, the route catalog, models, transcript, the notification rules (`Attention.kt`), Markdown, findings and the voice mode's tools and read-back rules (`Voice.kt`). No Android code. |
+| `app/` | The Android app: the Keystore vault and encrypted response cache, the store shared by every window, the events service and notifications with direct reply, voice notes, the voice conversation (`RealtimeCall.kt`, `VoiceSession.kt`) and the `Navigator` it drives the windows through, the four windows, and the Compose screens under `ui/`. |
 
 ## Pairing
 
@@ -76,6 +77,7 @@ Behind Cloudflare Access, the server's `/api/v1` and `/api/v1/*` paths need the 
 - No shared secret is built into the app. The token is sealed with AES-256-GCM under a key generated inside the Android Keystore that never leaves the headset, and is sent only to the server it was paired with.
 - Saved responses are sealed with the same key in the app's no-backup directory and erased when the connection is forgotten, revoked or replaced; entries untouched for 30 days are dropped. Nothing is included in backups or device transfers.
 - Voice notes are sent to your server for transcription and nowhere else.
+- The voice panel is the exception: while a voice conversation is on, the microphone's audio goes to OpenAI (`api.openai.com`) under your own API key, with the answers of the tools it calls (titles, messages, pull requests and issues of your projects). The key is sealed in the vault with the token, sent only to OpenAI, and erased when the connection is forgotten. The connection to `api.openai.com` is pinned to the root keys of the CAs its CDN issues from. Nothing reaches OpenAI until you start a conversation.
 - No analytics or telemetry.
 
 ## Contributing and license

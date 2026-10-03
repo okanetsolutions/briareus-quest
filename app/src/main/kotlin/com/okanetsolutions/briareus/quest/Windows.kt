@@ -20,4 +20,8 @@ object Windows {
     fun openStatus(context: Context) = context.startActivity(
         Intent(context, StatusActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT),
     )
+
+    fun openVoice(context: Context) = context.startActivity(
+        Intent(context, VoiceActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT),
+    )
 }

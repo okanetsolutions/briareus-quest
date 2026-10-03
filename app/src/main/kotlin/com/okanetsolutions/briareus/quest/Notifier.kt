@@ -21,7 +21,9 @@ import com.okanetsolutions.briareus.core.Alert
 object Notifier {
     const val CHANNEL_ALERTS = "alerts"
     const val CHANNEL_SERVICE = "service"
+    const val CHANNEL_VOICE = "voice"
     const val SERVICE_ID = 1
+    const val VOICE_ID = 3
 
     fun createChannels(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java)
@@ -36,6 +38,33 @@ object Notifier {
                 setShowBadge(false)
             },
         )
+        manager.createNotificationChannel(
+            NotificationChannel(CHANNEL_VOICE, "Voice conversation", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "Shown while you talk to Briareus, with a button that ends the conversation."
+                setShowBadge(false)
+            },
+        )
+    }
+
+    /** While a voice conversation goes on: what it is, a tap back to its panel, and End. */
+    fun voiceNotification(context: Context): Notification {
+        val end = PendingIntent.getService(
+            context, 0, Intent(context, VoiceService::class.java).setAction(VoiceService.ACTION_END),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val open = PendingIntent.getActivity(
+            context, 1, Intent(context, VoiceActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        return NotificationCompat.Builder(context, CHANNEL_VOICE)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("Talking with Briareus")
+            .setContentText("The microphone is on until you end the conversation.")
+            .setOngoing(true)
+            .setSilent(true)
+            .setContentIntent(open)
+            .addAction(R.drawable.ic_notification, "End", end)
+            .build()
     }
 
     fun serviceNotification(context: Context, text: String): Notification =

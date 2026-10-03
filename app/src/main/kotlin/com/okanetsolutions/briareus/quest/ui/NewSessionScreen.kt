@@ -45,13 +45,14 @@ import kotlinx.coroutines.launch
 /** The dashboard's "Welcome back" composer: a project, a branch, a runtime, the review loop, and the first message. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun NewSessionScreen(store: Store, initialRepo: String?, onStarted: (String) -> Unit) {
+fun NewSessionScreen(store: Store, initialRepo: String?, initialPrompt: String? = null, onStarted: (String) -> Unit) {
     val p = LocalPalette.current
     val scope = rememberCoroutineScope()
     val projects by store.projects.collectAsState()
-    var picked by rememberSaveable { mutableStateOf(initialRepo) }
+    // Keyed on what was asked for, so the voice opening the form on another project or prompt fills it again.
+    var picked by rememberSaveable(initialRepo) { mutableStateOf(initialRepo) }
     val repo = picked?.takeIf { r -> projects.any { it.repo == r } } ?: projects.firstOrNull()?.repo
-    var prompt by rememberSaveable { mutableStateOf("") }
+    var prompt by rememberSaveable(initialRepo, initialPrompt) { mutableStateOf(initialPrompt.orEmpty()) }
     var catalog by remember { mutableStateOf<RuntimeCatalog?>(null) }
     var choice by remember { mutableStateOf<RuntimeChoice?>(null) }
     var branches by remember { mutableStateOf<Pair<String?, List<String>>>(null to emptyList()) }
