@@ -73,4 +73,12 @@ dependencies {
     implementation(libs.compose.ui.tooling.preview)
     debugImplementation(libs.compose.ui.tooling)
     testImplementation(libs.junit)
+    // The lint tool AGP runs resolves its own old copies of these; the same patched versions as the plugin classpath.
+    constraints {
+        add("androidLintTool", libs.bouncycastle.bcprov)
+        add("androidLintTool", libs.bouncycastle.bcpkix)
+        add("androidLintTool", libs.bouncycastle.bcutil)
+        add("androidLintTool", libs.commons.lang3)
+        add("androidLintTool", libs.httpclient)
+    }
 }
