@@ -27,6 +27,9 @@ class VoiceTest {
         assertEquals(Voice.TRANSCRIBER, s.obj("audio")!!.obj("input")!!.obj("transcription")!!.str("model"))
         assertEquals(VoiceTool.entries.size, s.objects("tools").size)
         assertTrue(s.str("instructions")!!.contains("Website (acme/web)"))
+        // Asking for a new panel opens the conversation in a panel of its own.
+        assertTrue(s.str("instructions")!!.contains("\"new panel\""))
+        assertTrue(s.str("instructions")!!.contains("show_conversation with own_panel=true"))
         // An unknown voice falls back to the default.
         assertEquals(Voice.DEFAULT_VOICE, Voice.session("nobody", projects).obj("audio")!!.obj("output")!!.str("voice"))
     }
