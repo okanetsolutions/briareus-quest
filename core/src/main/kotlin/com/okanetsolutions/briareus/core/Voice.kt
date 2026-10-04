@@ -52,7 +52,10 @@ object Voice {
         app, show_new_conversation opens the form to start one (with a prompt filled in if the user dictated one), \
         show_status_panel opens the status panel, and go_home leaves the main window on the list. These only show things; they need no confirmation. When the user says "this", "that", "it" or \
         "here", call read_screen first to learn what is on screen: "this pull request" is the pull request of the \
-        conversation on screen. After showing something, say in a few words what is now on screen.
+        conversation on screen. When the user asks for a conversation in a "new panel", a "separate panel", "its own \
+        panel" or "a new window", call show_conversation with own_panel=true; otherwise it goes to the main window. Only \
+        conversations open in panels of their own; say so if the user asks that of anything else. After showing \
+        something, say in a few words what is now on screen.
 
         ## Conversations and pull requests
         Find conversations with list_conversations before acting on one; never invent an id. Match what the user names \
@@ -490,7 +493,7 @@ enum class VoiceTool(val wire: String) {
                 READ_SCREEN -> "What the app's windows show right now: the conversation or pull request in the main window with its project, and the conversations open in panels of their own."
                 SHOW_CONVERSATION -> {
                     session()
-                    add("own_panel", "boolean", "True to open it in a panel of its own beside the others instead of the main window.", false)
+                    add("own_panel", "boolean", "True to open it in a panel of its own beside the others instead of the main window, as when the user asks for a new or separate panel.", false)
                     "Shows a conversation: its transcript, its question, its findings and its composer."
                 }
                 SHOW_PULL_REQUESTS -> { project(); "Shows a project's open pull requests in the main window, with their checks, labels and actions." }
