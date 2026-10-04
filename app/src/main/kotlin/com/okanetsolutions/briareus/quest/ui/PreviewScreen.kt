@@ -51,8 +51,11 @@ fun PreviewScreen(store: Store, url: String) {
     var access by remember { mutableStateOf<PreviewAccess?>(null) }
     val web = remember {
         WebView(context).apply {
+            // The served app is a web app and needs its scripts; nothing on the device is any business of its.
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
+            settings.allowContentAccess = false
+            settings.allowFileAccess = false
             webViewClient = object : WebViewClient() {
                 // A load the page starts itself (a link, a redirect) has no headers of ours, so one to a preview host is
                 // started again with them.
