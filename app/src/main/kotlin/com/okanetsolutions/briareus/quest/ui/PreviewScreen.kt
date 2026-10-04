@@ -1,8 +1,10 @@
 package com.okanetsolutions.briareus.quest.ui
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.view.View
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -41,54 +43,69 @@ import com.okanetsolutions.briareus.quest.Store
  * hosts; a page load there carries the server's service token, and Access answers with its own cookie, which lets the
  * page's other requests through. Without a token the page shows Access's sign-in, and its cookie keeps the sign-in.
  */
-@SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun PreviewScreen(store: Store, url: String) {
     val p = LocalPalette.current
     val context = LocalContext.current
     var address by remember { mutableStateOf(url) }
     var canGoBack by remember { mutableStateOf(false) }
-    var access by remember { mutableStateOf<PreviewAccess?>(null) }
-    val web = remember {
-        WebView(context).apply {
-            // The served app is a web app and needs its scripts; nothing on the device is any business of its.
-            settings.apply {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                allowContentAccess = false
-                allowFileAccess = false
-            }
-            webViewClient = object : WebViewClient() {
-                // A load the page starts itself (a link, a redirect) has no headers of ours, so one to a preview host is
-                // started again with them.
-                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                    if (!request.isForMainFrame) return false
-                    val headers = access?.headersFor(request.url.toString()).orEmpty()
-                    if (headers.isEmpty()) return false
-                    view.loadUrl(request.url.toString(), headers)
-                    return true
-                }
+    val browser = remember { PreviewBrowser(context) { now, back -> address = now; canGoBack = back } }
 
-                override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) { address = url }
-
-                override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) { address = url; canGoBack = view.canGoBack() }
-            }
-        }
-    }
-    fun load(target: String) = web.loadUrl(target, access?.headersFor(target).orEmpty())
-
-    LaunchedEffect(url) { access = store.previewAccess(); load(url) }
-    BackHandler(enabled = canGoBack) { web.goBack() }
+    LaunchedEffect(url) { browser.access = store.previewAccess(); browser.load(url) }
+    BackHandler(enabled = canGoBack) { browser.back() }
 
     Column(Modifier.fillMaxSize().background(p.canvas)) {
         Row(Modifier.fillMaxWidth().background(p.sidebar).padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("▶ Run", style = MaterialTheme.typography.titleMedium, color = p.ink)
             Text(address, Modifier.weight(1f).padding(horizontal = 12.dp), style = MaterialTheme.typography.bodyMedium, color = p.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            IconButton(onClick = { load(web.url ?: url) }) { Icon(Icons.Outlined.Refresh, "Reload", tint = p.muted) }
+            IconButton(onClick = { browser.reload(url) }) { Icon(Icons.Outlined.Refresh, "Reload", tint = p.muted) }
             IconButton(onClick = {
                 runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, address.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)) }
             }) { Icon(Icons.AutoMirrored.Outlined.OpenInNew, "Open in the browser", tint = p.muted) }
         }
-        AndroidView({ web }, Modifier.weight(1f).fillMaxWidth())
+        AndroidView({ browser.view }, Modifier.weight(1f).fillMaxWidth())
     }
+}
+
+/**
+ * The preview's WebView. It is built and set up in one place so the settings visibly reach the one WebView there is:
+ * scripts on, since the served app is a web app, and content and file URLs off, since nothing on the device is its business.
+ */
+@SuppressLint("SetJavaScriptEnabled")
+private class PreviewBrowser(context: Context, onPage: (address: String, canGoBack: Boolean) -> Unit) {
+    var access: PreviewAccess? = null
+    private val web: WebView
+
+    init {
+        val created = WebView(context)
+        val settings = created.settings
+        settings.javaScriptEnabled = true
+        settings.domStorageEnabled = true
+        settings.allowContentAccess = false
+        settings.allowFileAccess = false
+        created.webViewClient = object : WebViewClient() {
+            // A load the page starts itself (a link, a redirect) has no headers of ours, so one to a preview host is
+            // started again with them.
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                if (!request.isForMainFrame) return false
+                val headers = access?.headersFor(request.url.toString()).orEmpty()
+                if (headers.isEmpty()) return false
+                view.loadUrl(request.url.toString(), headers)
+                return true
+            }
+
+            override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) = onPage(url, view.canGoBack())
+
+            override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) = onPage(url, view.canGoBack())
+        }
+        web = created
+    }
+
+    val view: View get() = web
+
+    fun load(target: String) = web.loadUrl(target, access?.headersFor(target).orEmpty())
+
+    fun reload(fallback: String) = load(web.url ?: fallback)
+
+    fun back() = web.goBack()
 }
