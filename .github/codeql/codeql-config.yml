@@ -1,0 +1,10 @@
+# The security-and-quality suite, less one query.
+#
+# java/android/websettings-javascript-enabled flags any WebView that runs scripts. The ▶ Run preview panel
+# (app/.../ui/PreviewScreen.kt) shows the project's own running web app, which cannot work without them, so the alert
+# would be dismissed on every pull request that touches that file. The WebView has no JavaScript interface and no
+# content or file access, and the Access service token goes only to the preview hosts. A new WebView elsewhere would
+# need its own look at this rule.
+query-filters:
+  - exclude:
+      id: java/android/websettings-javascript-enabled
