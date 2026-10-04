@@ -39,6 +39,8 @@ object Routes {
         ApiRoute("findings", "GET", "pulls/{pr}/findings"),
         ApiRoute("merge_pull", "POST", "pulls/{pr}/merge"),
         ApiRoute("serve_pull", "POST", "pulls/{pr}/serve"),
+        // The Cloudflare Access service token ▶ Run's preview hosts take, so the preview opens without a sign-in.
+        ApiRoute("preview_access", "GET", "preview/access"),
         // Issues. Their comments are on the timeline, 100 a `page`, oldest first.
         ApiRoute("issue", "GET", "issues/{issue}"),
         ApiRoute("issue_timeline", "GET", "issues/{issue}/timeline"),

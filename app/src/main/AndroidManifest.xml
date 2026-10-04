@@ -76,6 +76,18 @@
       <layout android:defaultWidth="460dp" android:defaultHeight="720dp" android:minWidth="340dp" android:minHeight="420dp" />
     </activity>
 
+    <!-- ▶ Run's preview: the served app in a browser of the app's own, which carries the preview service token. -->
+    <activity
+      android:name=".PreviewActivity"
+      android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation"
+      android:exported="false"
+      android:launchMode="singleTask"
+      android:resizeableActivity="true"
+      android:taskAffinity="com.okanetsolutions.briareus.quest.preview"
+      android:windowSoftInputMode="adjustResize">
+      <layout android:defaultWidth="1280dp" android:defaultHeight="800dp" android:minWidth="480dp" android:minHeight="400dp" />
+    </activity>
+
     <!-- Keeps the microphone open while a voice conversation goes on and you look at another app. -->
     <service
       android:name=".VoiceService"

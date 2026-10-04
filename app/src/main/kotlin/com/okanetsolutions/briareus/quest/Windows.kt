@@ -21,6 +21,12 @@ object Windows {
         Intent(context, StatusActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT),
     )
 
+    /** A ▶ Run preview, in the app's own browser panel so it carries the server's Cloudflare Access service token. */
+    fun openPreview(context: Context, url: String) = context.startActivity(
+        Intent(context, PreviewActivity::class.java).putExtra(PreviewActivity.EXTRA_URL, url)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT),
+    )
+
     fun openVoice(context: Context) = context.startActivity(
         Intent(context, VoiceActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT),
     )

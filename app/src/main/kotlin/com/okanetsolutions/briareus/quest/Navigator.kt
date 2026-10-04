@@ -77,8 +77,8 @@ class Navigator(context: Context, private val store: Store) {
                 "Issue #${action.number} is open in the browser."
             }
             is ScreenAction.Preview -> {
-                browse(sessions[action.sessionId]?.serveUrl ?: error("That conversation serves nothing right now."))
-                "What \"${title(action.sessionId)}\" serves is open in the browser."
+                Windows.openPreview(context, sessions[action.sessionId]?.serveUrl ?: error("That conversation serves nothing right now."))
+                "What \"${title(action.sessionId)}\" serves is open in the preview panel."
             }
             ScreenAction.StatusPanel -> {
                 Windows.openStatus(context)

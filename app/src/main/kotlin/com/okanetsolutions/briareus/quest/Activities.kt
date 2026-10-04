@@ -15,11 +15,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.okanetsolutions.briareus.quest.ui.BriareusTheme
 import com.okanetsolutions.briareus.quest.ui.ConversationScreen
 import com.okanetsolutions.briareus.quest.ui.HomeScreen
 import com.okanetsolutions.briareus.quest.ui.PairingScreen
+import com.okanetsolutions.briareus.quest.ui.PreviewScreen
 import com.okanetsolutions.briareus.quest.ui.StatusScreen
 import com.okanetsolutions.briareus.quest.ui.VoiceScreen
 
@@ -123,6 +127,34 @@ class StatusActivity : BriareusActivity() {
             LaunchedEffect(connection) { if (connection == null) finishAndRemoveTask() }
             StatusScreen(store) { id -> Windows.openConversation(this, id) }
         }
+    }
+}
+
+/** A ▶ Run preview in its own panel; opening another brings this panel back with the new address. */
+class PreviewActivity : BriareusActivity() {
+    private var url by mutableStateOf<String?>(null)
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        url = intent.getStringExtra(EXTRA_URL)
+        if (url == null || store.connection.value == null) {
+            finish()
+            return
+        }
+        content {
+            val connection by store.connection.collectAsState()
+            LaunchedEffect(connection) { if (connection == null) finishAndRemoveTask() }
+            url?.let { key(it) { PreviewScreen(store, it) } }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        intent.getStringExtra(EXTRA_URL)?.let { url = it }
+    }
+
+    companion object {
+        const val EXTRA_URL = "url"
     }
 }
 
