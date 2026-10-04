@@ -1,3 +1,18 @@
+// AGP pulls in old versions of these with known vulnerabilities; raise them to patched ones on the plugin classpath.
+buildscript {
+    dependencies {
+        constraints {
+            classpath(libs.bouncycastle.bcprov)
+            classpath(libs.bouncycastle.bcpkix)
+            classpath(libs.bouncycastle.bcutil)
+            classpath(libs.jose4j)
+            classpath(libs.jdom2)
+            classpath(libs.commons.lang3)
+            classpath(libs.httpclient)
+        }
+    }
+}
+
 plugins {
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.kotlin.jvm) apply false

@@ -5,11 +5,12 @@ coroutines = "1.11.0"
 serialization = "1.11.0"
 okhttp = "5.5.0"
 composeBom = "2026.09.00"
-activityCompose = "1.10.1"
-lifecycle = "2.9.2"
+activityCompose = "1.13.0"
+lifecycle = "2.11.0"
 coreKtx = "1.19.1"
 junit = "4.13.2"
 detekt = "1.23.8"
+bouncycastle = "1.86"
 
 [libraries]
 coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -30,6 +31,14 @@ compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
 compose-foundation = { module = "androidx.compose.foundation:foundation" }
 compose-material3 = { module = "androidx.compose.material3:material3" }
 compose-material-icons = { module = "androidx.compose.material:material-icons-extended" }
+# Patched versions of what AGP and its lint tool pull in transitively; applied only as constraints.
+bouncycastle-bcprov = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bouncycastle" }
+bouncycastle-bcpkix = { module = "org.bouncycastle:bcpkix-jdk18on", version.ref = "bouncycastle" }
+bouncycastle-bcutil = { module = "org.bouncycastle:bcutil-jdk18on", version.ref = "bouncycastle" }
+jose4j = { module = "org.bitbucket.b_c:jose4j", version = "0.9.7" }
+jdom2 = { module = "org.jdom:jdom2", version = "2.0.6.1" }
+commons-lang3 = { module = "org.apache.commons:commons-lang3", version = "3.21.0" }
+httpclient = { module = "org.apache.httpcomponents:httpclient", version = "4.5.14" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
