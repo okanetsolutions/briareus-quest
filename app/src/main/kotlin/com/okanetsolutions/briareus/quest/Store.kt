@@ -7,6 +7,7 @@ import com.okanetsolutions.briareus.core.ApiError
 import com.okanetsolutions.briareus.core.BriareusJson
 import com.okanetsolutions.briareus.core.Connection
 import com.okanetsolutions.briareus.core.Discovery
+import com.okanetsolutions.briareus.core.PreviewAccess
 import com.okanetsolutions.briareus.core.Project
 import com.okanetsolutions.briareus.core.RuntimeCatalog
 import com.okanetsolutions.briareus.core.ServerAddress
@@ -144,6 +145,7 @@ class Store(context: Context) {
             _sessions.value = emptyMap()
             conversations.values.forEach { it.close() }
             conversations.clear()
+            previewAccess = null
             cache.clear()
             vault.destroy()
             signedOutReason = reason
@@ -288,6 +290,16 @@ class Store(context: Context) {
 
     suspend fun send(sessionId: String, text: String, attachments: List<String> = emptyList()): Boolean =
         mutate("message", args("sessionId" to sessionId, "text" to text, "attachments" to attachments.ifEmpty { null })) != null
+
+    /** The service token ▶ Run's previews take past Cloudflare Access, read once; null when the server has none for this token. */
+    private var previewAccess: PreviewAccess? = null
+
+    suspend fun previewAccess(): PreviewAccess? {
+        previewAccess?.let { return it }
+        if (!can("preview_access")) return null
+        return runCatching { PreviewAccess.parse(client!!.call("preview_access")) }
+            .onFailure { failed(it, silent = true) }.getOrNull()?.also { previewAccess = it }
+    }
 
     suspend fun runtimes(repo: String): RuntimeCatalog? = runCatching { RuntimeCatalog.parse(client!!.call("runtimes", args("repo" to repo))) }
         .onFailure { failed(it) }.getOrNull()

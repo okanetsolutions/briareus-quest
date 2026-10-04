@@ -22,7 +22,7 @@ A Meta Quest client for [Briareus](https://github.com/nadinyamaui/briareus), the
 - Streams each transcript live (`GET /sessions/{id}/events`), resuming from the last line seen, with the time of each message, agent questions, tool activity collapsed into clusters (expandable) and turn results with their time and cost. Status and workspace setup lines are left out.
 - Renders agent replies as Markdown: headings, paragraphs, bullet, numbered and task lists, quotes, code blocks with a copy button, tables, rules, bold, italic, strikethrough, inline code and links. Text is selectable.
 - Starts conversations on a chosen project, branch, provider, model and effort, or on the project default, with the review loop on or off.
-- Sends follow-ups (into the running turn or the queue, as the server decides), takes back queued messages, attaches files, stops, closes, reopens and deletes sessions, turns the review loop on or off, and opens the pull request or ▶ Run's preview in the browser beside it.
+- Sends follow-ups (into the running turn or the queue, as the server decides), takes back queued messages, attaches files, stops, closes, reopens and deletes sessions, turns the review loop on or off, and opens the pull request in the browser beside it and ▶ Run's preview in a panel of its own.
 - Shows each project's open pull requests, as the dashboard's Pull requests tab does: checks, assignees, author, branch, labels, stacks and linked issues, filtered by author or label. Each one serves its branch (▶ Run), runs the project's errands (code review, QA, feedback and the rest, with the recommended one highlighted), merges, and opens the conversations already run on it. A pull request opens to its description, checks, reviews, findings, linked issues and commits.
 - Decides held review findings (fix, optional, dismiss, and a note) and completes the round into the fix session, as the dashboard's Findings screen does.
 
@@ -67,7 +67,7 @@ detekt runs on both modules, and the core (address and token rules, the API clie
 2. Create a token: give the headset a name, choose the projects it may see, **Read only** or **Manage**, and an expiry. **Manage** is what lets you answer agents and start sessions from the headset.
 3. In the app, enter the public HTTPS server address (or its `/api/v1` URL) and the one-time token.
 
-Behind Cloudflare Access, the server's `/api/v1` and `/api/v1/*` paths need the Bypass application described in the server's [client API guide](https://github.com/nadinyamaui/briareus/blob/main/docs/api-v1.md#deploying-behind-cloudflare-access); the app refuses the login page it is otherwise redirected to.
+Behind Cloudflare Access, the server's `/api/v1` and `/api/v1/*` paths need the Bypass application described in the server's [client API guide](https://github.com/nadinyamaui/briareus/blob/main/docs/api-v1.md#deploying-behind-cloudflare-access); the app refuses the login page it is otherwise redirected to. ▶ Run's preview opens in the app's own browser panel, which gets past Access on the preview hosts with the server's preview service token (`GET /preview/access`, for a manage token), sent only to those hosts, as the Windows client does; on a server without one the panel shows Access's sign-in and keeps it.
 
 **Forget this connection** erases the token and everything saved on the headset, and the key that sealed them. It does not revoke the server token or stop running agents; **Revoke the token and forget** also revokes it (`DELETE /token`).
 

@@ -70,6 +70,7 @@ import com.okanetsolutions.briareus.core.nonEmpty
 import com.okanetsolutions.briareus.core.obj
 import com.okanetsolutions.briareus.core.str
 import com.okanetsolutions.briareus.quest.Store
+import com.okanetsolutions.briareus.quest.Windows
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -274,7 +275,7 @@ private fun PullActions(store: Store, repo: String, number: Int, recommended: St
                 when (action) {
                     PendingAction.Serve -> store.mutate("serve_pull", args("repo" to repo, "pr" to number))?.let { r ->
                         Session.parse(r["session"])?.let { onPane(Pane.Open(it.id)) }
-                        r.nonEmpty("url")?.let { openBeside(context, it) }
+                        r.nonEmpty("url")?.let { Windows.openPreview(context, it) }
                     }
                     is PendingAction.Run -> store.mutate("action", args("repo" to repo, "action" to action.errand.id, "prNumber" to number, "input" to input))
                         ?.let { r -> Session.parse(r["session"])?.let { onPane(Pane.Open(it.id)) } }

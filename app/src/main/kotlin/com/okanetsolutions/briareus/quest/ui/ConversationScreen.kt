@@ -77,6 +77,7 @@ import com.okanetsolutions.briareus.core.Triage
 import com.okanetsolutions.briareus.core.args
 import com.okanetsolutions.briareus.quest.Notifier
 import com.okanetsolutions.briareus.quest.Store
+import com.okanetsolutions.briareus.quest.Windows
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -233,7 +234,7 @@ private fun Header(
             DropdownMenu(menu, onDismissRequest = { menu = false }) {
                 fun item(text: String, enabled: Boolean = true, action: () -> Unit) =
                     @Composable { DropdownMenuItem(text = { Text(text) }, enabled = enabled, onClick = { menu = false; action() }) }
-                session.serveUrl?.let { url -> item("Open ▶ Run in the browser") { open(url) }() }
+                session.serveUrl?.let { url -> item("Open ▶ Run") { Windows.openPreview(context, url) }() }
                 session.pullUrl?.let { url -> item("Open the pull request") { open(url) }() }
                 if (store.can("review_loop")) item(if (session.reviewLoopOn) "Turn the review loop off" else "Turn the review loop on") {
                     act("review_loop", "on" to !session.reviewLoopOn)

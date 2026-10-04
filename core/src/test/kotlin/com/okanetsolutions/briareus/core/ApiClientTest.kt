@@ -94,6 +94,14 @@ class ApiClientTest {
         assertTrue(server.requests.isEmpty())
     }
 
+    @Test fun previewAccessIsAPlainGet() = runTest {
+        server.reply(body = """{"clientId":"id","clientSecret":"s","hostSuffix":"preview.example.com"}""")
+        val access = PreviewAccess.parse(client.call("preview_access"))
+        assertEquals("https://b.example/api/v1/preview/access", server.requests.last().url.toString())
+        assertEquals("GET", server.requests.last().method)
+        assertEquals("preview.example.com", access?.hostSuffix)
+    }
+
     @Test fun theSessionListIsCutToARepo() = runTest {
         server.reply(body = """{"sessions":[{"id":"1","repo":"o/a"},{"id":"2","repo":"o/b"}]}""")
         val result = client.call("sessions", args("repo" to "o/b"))
