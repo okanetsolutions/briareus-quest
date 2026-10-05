@@ -1,7 +1,6 @@
 package com.okanetsolutions.briareus.quest
 
 import android.content.Context
-import androidx.core.content.edit
 import com.okanetsolutions.briareus.core.ApiClient
 import com.okanetsolutions.briareus.core.ApiError
 import com.okanetsolutions.briareus.core.BriareusJson
@@ -36,14 +35,15 @@ import kotlinx.serialization.json.JsonObject
 import kotlin.math.min
 
 /**
- * The connection and everything read through it, shared by every window and the background service. One `GET /events`
+ * The connection and everything read through it, shared by every window and the voice service. One `GET /events`
  * stream feeds the projects' conversations while anything watches ([watch]); each open conversation streams its own
  * transcript ([conversation]).
  */
 class Store(context: Context) {
     val vault = Vault(context)
     val cache = ResponseCache(context, vault)
-    private val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+    val review = ReviewReader(this)
+    val runs = RunRequests(this)
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private val _connection = MutableStateFlow<Connection?>(null)
@@ -60,10 +60,6 @@ class Store(context: Context) {
     private val _link = MutableStateFlow(Link.OFFLINE)
     val link: StateFlow<Link> = _link.asStateFlow()
 
-    /** Every session record as it arrives from the stream, for the notification rules. */
-    private val _updates = MutableSharedFlow<Session>(extraBufferCapacity = 64)
-    val updates: SharedFlow<Session> = _updates.asSharedFlow()
-
     /** Something the user should read: a failed action, a lost connection. */
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val messages: SharedFlow<String> = _messages.asSharedFlow()
@@ -71,12 +67,8 @@ class Store(context: Context) {
     /** Why the app went back to pairing, shown there once. */
     var signedOutReason: String? = null
 
-    /** The conversations on screen right now; their alerts are not notified. */
+    /** The conversations on screen right now, used by voice navigation. */
     val visibleSessions = MutableStateFlow<Set<String>>(emptySet())
-
-    var backgroundAlerts: Boolean
-        get() = prefs.getBoolean("background_alerts", true)
-        set(value) = prefs.edit { putBoolean("background_alerts", value) }
 
     init {
         cache.prune()
@@ -111,6 +103,7 @@ class Store(context: Context) {
             vault.putString("token:${address.origin}", token)
             val connection = Connection(address, discovery.device, catalog, discovery.transcribe)
             vault.putString("connection", connection.toJson().toString())
+            runs.clear()
             client = candidate
             _connection.value = connection
             signedOutReason = null
@@ -139,6 +132,7 @@ class Store(context: Context) {
         scope.launch {
             if (revoke && c != null) runCatching { c.call("revoke_token") }
             stopEvents()
+            runs.clear()
             client = null
             _connection.value = null
             _projects.value = emptyList()
@@ -186,7 +180,6 @@ class Store(context: Context) {
 
     fun upsert(session: Session) {
         _sessions.update { it + (session.id to session) }
-        _updates.tryEmit(session)
         saveSessions()
     }
 
@@ -211,7 +204,7 @@ class Store(context: Context) {
     private var watchers = 0
     private var eventsJob: Job? = null
 
-    /** Keeps `GET /events` open until the returned release runs. Windows hold one while shown; the service while it runs. */
+    /** Keeps `GET /events` open until the returned release runs. Windows hold one while shown; the voice service during a call. */
     fun watch(): () -> Unit {
         watchers++
         startEvents()

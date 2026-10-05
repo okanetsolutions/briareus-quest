@@ -38,15 +38,13 @@ Nothing touches the network. `FakeServer` in `ApiClientTest.kt` is an OkHttp `In
 `ApiClient.defaultHttpClient().newBuilder().addInterceptor(server).build()`. Assert the method, path, query and body of
 every call you add: the suite is the contract with the server.
 
-Pure rules (`AttentionTracker`, `SessionList`, `Markdown`, `Triage`, `ServerAddress`, `RouteCatalog`) are tested
+Pure rules (`SessionList`, `Markdown`, `Triage`, `ServerAddress`, `RouteCatalog`) are tested
 directly with their inputs, no fakes needed.
 
 ## What a change must ship with
 
 - New or changed behaviour in `core/` gets a test in the matching file; a bug fix starts with the failing test.
 - A new call also satisfies `RoutesTest.everyCallHasARoute` (unique names) and gets an `ApiClientTest` case.
-- Changes to what notifies (`Attention.kt`) go through `AttentionTest`: the first copy of a session never alerts,
-  worker sessions never alert, and only `WORKING → IDLE` means "finished".
 - UI changes in `app/` have no unit tests; run them on a headset (the `headset` skill) and put a screenshot in the PR.
 - A detekt finding in deliberately complex code (a parser) is suppressed at the function with a short reason, not by
   loosening `config/detekt/detekt.yml`.

@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
  */
 class VoiceService : Service() {
     private var job: Job? = null
+    private var release: (() -> Unit)? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -26,12 +27,13 @@ class VoiceService : Service() {
             return START_NOT_STICKY
         }
         try {
-            ServiceCompat.startForeground(this, Notifier.VOICE_ID, Notifier.voiceNotification(this), ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+            ServiceCompat.startForeground(this, 3, VoiceNotification.create(this), ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
         } catch (_: Exception) {
             // Android refuses a microphone service started from the background; the panel keeps the call going while shown.
             stopSelf()
             return START_NOT_STICKY
         }
+        if (release == null) release = store.watch()
         if (job == null) job = store.scope.launch {
             voice.phase.collect { if (it == VoiceSession.Phase.OFF) stopSelf() }
         }
@@ -41,6 +43,8 @@ class VoiceService : Service() {
     override fun onDestroy() {
         job?.cancel()
         job = null
+        release?.invoke()
+        release = null
         super.onDestroy()
     }
 

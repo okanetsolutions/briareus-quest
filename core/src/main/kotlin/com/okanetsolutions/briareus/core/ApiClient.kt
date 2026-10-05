@@ -64,12 +64,12 @@ class ApiClient(
         val kept = route.filter?.let { (rest.remove(it) as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }
         val reads = route.method == "GET" || route.method == "DELETE"
         val result = if (reads) {
-            request(route.method, url(path, JsonObject(rest)), null, timeoutMs)
+            request(route.method, url(path, JsonObject(rest)), null, timeoutMs ?: route.timeoutMs)
         } else {
             route.set?.let { rest[it] = JsonPrimitive(true) }
             val body = BriareusJson.encodeToString(JsonObject.serializer(), JsonObject(rest))
             if (body.toByteArray().size > MAX_REQUEST_BYTES) throw ApiError(ApiError.Kind.OVERSIZED_REQUEST)
-            request(route.method, url(path), body.toRequestBody(JSON), timeoutMs)
+            request(route.method, url(path), body.toRequestBody(JSON), timeoutMs ?: route.timeoutMs)
         }
         val filter = route.filter ?: return result
         val list = route.list ?: return result
@@ -164,7 +164,7 @@ class ApiClient(
         Request.Builder().url(url).header("Authorization", "Bearer $token").header("Accept", accept).header("User-Agent", USER_AGENT)
 
     private suspend fun request(method: String, url: HttpUrl, body: RequestBody?, timeoutMs: Long? = null): JsonObject {
-        val client = if (timeoutMs != null) http.newBuilder().callTimeout(timeoutMs, TimeUnit.MILLISECONDS).build() else http
+        val client = if (timeoutMs != null) http.newBuilder().callTimeout(timeoutMs, TimeUnit.MILLISECONDS).readTimeout(timeoutMs, TimeUnit.MILLISECONDS).build() else http
         val request = baseRequest(url).method(method, body ?: if (method == "POST" || method == "PUT" || method == "PATCH") ByteArray(0).toRequestBody(JSON) else null).build()
         return client.newCall(request).await().use { response ->
             check(response)

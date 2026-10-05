@@ -1,7 +1,5 @@
 package com.okanetsolutions.briareus.quest.ui
 
-import android.content.Context
-import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,7 +23,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
@@ -55,7 +52,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.net.toUri
 import com.okanetsolutions.briareus.core.ApiError
 import com.okanetsolutions.briareus.core.Board
 import com.okanetsolutions.briareus.core.Errand
@@ -89,6 +85,7 @@ private const val BOARD_POLL_MS = 60_000L
 fun PullsScreen(store: Store, repo: String, onPane: (Pane?) -> Unit, back: (() -> Unit)?) {
     val p = LocalPalette.current
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val sessions by store.sessions.collectAsState()
     var board by remember(repo) { mutableStateOf<Board?>(null) }
     var errands by remember { mutableStateOf<List<Errand>>(emptyList()) }
@@ -126,6 +123,7 @@ fun PullsScreen(store: Store, repo: String, onPane: (Pane?) -> Unit, back: (() -
 
     Column(Modifier.fillMaxSize().background(p.canvas)) {
         Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 12.dp, top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = { Windows.openPanel(context, Pane.Pulls(repo)) }) { Text("⧉ New panel") }
             if (back != null) IconButton(onClick = back) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back", tint = p.muted) }
             Column(Modifier.weight(1f).padding(start = if (back == null) 8.dp else 0.dp)) {
                 Text(store.projectTitle(repo), style = MaterialTheme.typography.titleLarge, color = p.ink)
@@ -168,7 +166,7 @@ fun PullsScreen(store: Store, repo: String, onPane: (Pane?) -> Unit, back: (() -
 }
 
 @Composable
-private fun Filter(label: String, current: String?, options: List<String>, onPick: (String?) -> Unit) {
+fun Filter(label: String, current: String?, options: List<String>, onPick: (String?) -> Unit) {
     val p = LocalPalette.current
     var open by remember { mutableStateOf(false) }
     if (options.isEmpty()) return
@@ -189,7 +187,7 @@ private fun PullCard(store: Store, repo: String, pr: PullRow, errands: List<Erra
     val p = LocalPalette.current
     Column(
         Modifier.fillMaxWidth().background(p.raise, RoundedCornerShape(12.dp)).border(1.dp, p.line, RoundedCornerShape(12.dp))
-            .clickable { onPane(Pane.Pull(repo, pr.number)) }.padding(14.dp),
+            .clickable(enabled = store.can("pull")) { onPane(Pane.Pull(repo, pr.number)) }.padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(verticalAlignment = Alignment.Top) {
@@ -244,7 +242,7 @@ private fun checksColor(rollup: String?): Color {
 }
 
 @Composable
-private fun LabelChip(label: PullLabel, tint: Color? = null) {
+fun LabelChip(label: PullLabel, tint: Color? = null) {
     val p = LocalPalette.current
     // GitHub's label colours are picked for a light page; lifted towards white they read on the dark panel.
     val color = tint ?: label.argb?.let { lerpToInk(Color(it), p.ink) } ?: p.muted
@@ -258,7 +256,7 @@ private fun lerpToInk(c: Color, ink: Color): Color = Color(
     red = c.red + (ink.red - c.red) * 0.35f, green = c.green + (ink.green - c.green) * 0.35f, blue = c.blue + (ink.blue - c.blue) * 0.35f,
 )
 
-/** What can be started on a pull request: serving it (▶ Run), the project's errands, merging, and its earlier runs. */
+/** Starts Run, Code review, project errands or merging, and links to earlier runs. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PullActions(store: Store, repo: String, number: Int, recommended: String?, errands: List<Errand>, runs: List<Session>, onPane: (Pane?) -> Unit) {
@@ -273,12 +271,13 @@ private fun PullActions(store: Store, repo: String, number: Int, recommended: St
         scope.launch {
             try {
                 when (action) {
-                    PendingAction.Serve -> store.mutate("serve_pull", args("repo" to repo, "pr" to number))?.let { r ->
-                        Session.parse(r["session"])?.let { onPane(Pane.Open(it.id)) }
-                        r.nonEmpty("url")?.let { Windows.openPreview(context, it) }
+                    PendingAction.Serve -> {
+                        store.runs.start(repo, number)
+                        Windows.openPullRun(context, repo, number)
                     }
                     is PendingAction.Run -> store.mutate("action", args("repo" to repo, "action" to action.errand.id, "prNumber" to number, "input" to input))
                         ?.let { r -> Session.parse(r["session"])?.let { onPane(Pane.Open(it.id)) } }
+                    PendingAction.Review -> store.review.start(repo, number)?.let { onPane(Pane.Open(it.id)) }
                     PendingAction.Merge -> merge(store, repo, number)
                 }
             } finally {
@@ -288,9 +287,16 @@ private fun PullActions(store: Store, repo: String, number: Int, recommended: St
     }
 
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
-        if (store.can("serve_pull")) ActionButton("▶ Run", enabled = !busy) { pending = PendingAction.Serve }
-        if (store.can("action")) errands.forEach { e -> ActionButton(e.label, enabled = !busy, highlighted = e.id == recommended) { pending = PendingAction.Run(e) } }
-        if (store.can("merge_pull") && store.can("pull")) ActionButton("↳ Merge", enabled = !busy) { pending = PendingAction.Merge }
+        if (store.can("serve_pull")) ActionButton("▶ Run", enabled = !busy) { start(PendingAction.Serve, null) }
+        if (store.can("review") && store.can("pull")) ActionButton("⌕ Code review", enabled = !busy, highlighted = recommended == "review") {
+            start(PendingAction.Review, null)
+        }
+        if (store.can("action")) errands.filter { it.id != "review" && it.id != "run" }.forEach { e ->
+            ActionButton(e.label, enabled = !busy, highlighted = e.id == recommended) {
+                if (e.inputLabel != null) pending = PendingAction.Run(e) else start(PendingAction.Run(e), null)
+            }
+        }
+        if (store.can("merge_pull") && store.can("pull")) ActionButton("↳ Merge", enabled = !busy) { start(PendingAction.Merge, null) }
         if (busy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
         if (runs.isNotEmpty()) TextButton(onClick = { onPane(Pane.Open(runs.first().id)) }) {
             Text("${runs.size} run${if (runs.size == 1) "" else "s"} ›", color = p.accent)
@@ -302,36 +308,18 @@ private fun PullActions(store: Store, repo: String, number: Int, recommended: St
         val errand = (action as? PendingAction.Run)?.errand
         AlertDialog(
             onDismissRequest = { pending = null },
-            title = {
-                Text(
-                    when (action) {
-                        PendingAction.Serve -> "Serve #$number?"
-                        PendingAction.Merge -> "Merge #$number?"
-                        is PendingAction.Run -> "${action.errand.label} on #$number?"
-                    },
-                )
-            },
+            title = { Text(errand?.label.orEmpty()) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        when (action) {
-                            PendingAction.Serve -> "Prepares a workspace for the pull request and serves it with the project's run commands, without an agent turn."
-                            PendingAction.Merge -> "Squash-merges it on GitHub at the head that is there now. A push in between refuses the merge."
-                            is PendingAction.Run -> action.errand.hint ?: "Starts a paid session on the project's configured runtime. It may write to GitHub."
-                        },
-                        color = p.muted,
-                    )
-                    errand?.inputLabel?.let { asked ->
-                        Text(asked + if (errand.inputRequired) "" else " (optional)", style = MaterialTheme.typography.labelLarge, color = p.ink)
-                        VoiceField(store, input, { input = it }, Modifier.fillMaxWidth(), placeholder = "Record it", minHeight = 96.dp)
-                    }
+                    Text(errand?.inputLabel.orEmpty() + if (errand?.inputRequired == true) "" else " (optional)", color = p.ink)
+                    VoiceField(store, input, { input = it }, Modifier.fillMaxWidth(), placeholder = "Record it", minHeight = 96.dp)
                 }
             },
             confirmButton = {
                 TextButton(
                     enabled = errand?.inputRequired != true || input.isNotBlank(),
                     onClick = { pending = null; start(action, input.trim().ifEmpty { null }) },
-                ) { Text(if (action == PendingAction.Merge) "Merge" else "Start", color = p.accent) }
+                ) { Text("Start", color = p.accent) }
             },
             dismissButton = { TextButton(onClick = { pending = null }) { Text("Cancel") } },
         )
@@ -340,6 +328,7 @@ private fun PullActions(store: Store, repo: String, number: Int, recommended: St
 
 private sealed interface PendingAction {
     data object Serve : PendingAction
+    data object Review : PendingAction
     data object Merge : PendingAction
     data class Run(val errand: Errand) : PendingAction
 }
@@ -376,22 +365,16 @@ private fun ActionButton(text: String, enabled: Boolean, highlighted: Boolean = 
     ) { Text(text, style = MaterialTheme.typography.labelLarge) }
 }
 
-/** Opens a page in the browser beside this panel. */
-private fun openBeside(context: Context, url: String) {
-    runCatching {
-        context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT))
-    }
-}
-
 // MARK: - One pull request
 
 /** One pull request in full: where it stands, its description, checks, reviews, linked issues, commits and findings. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun PullScreen(store: Store, repo: String, number: Int, onPane: (Pane?) -> Unit) {
+fun PullScreen(store: Store, repo: String, number: Int, onPane: (Pane?) -> Unit, initialView: String? = null) {
     val p = LocalPalette.current
     val context = LocalContext.current
     val sessions by store.sessions.collectAsState()
+    var tab by remember(repo, number, initialView) { mutableStateOf(initialView?.takeUnless { it == "checks" } ?: "overview") }
     var pr by remember(repo, number) { mutableStateOf<PullOverview?>(null) }
     var body by remember(repo, number) { mutableStateOf<String?>(null) }
     var findings by remember(repo, number) { mutableStateOf<List<PullFinding>?>(null) }
@@ -422,15 +405,25 @@ fun PullScreen(store: Store, repo: String, number: Int, onPane: (Pane?) -> Unit)
         Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 12.dp, top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = { onPane(Pane.Pulls(repo)) }) { Text("← Pull requests") }
             Box(Modifier.weight(1f))
-            pr?.url?.let { url ->
-                TextButton(onClick = { openBeside(context, url) }) {
-                    Icon(Icons.AutoMirrored.Outlined.OpenInNew, null, Modifier.size(18.dp))
-                    Text("GitHub", Modifier.padding(start = 6.dp))
-                }
-            }
+            TextButton(onClick = { Windows.openPanel(context, Pane.Pull(repo, number, tab)) }) { Text("⧉ New panel") }
             IconButton(onClick = { reload++ }) { Icon(Icons.Outlined.Refresh, "Read it again", tint = p.muted) }
         }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("overview" to "Overview", "files" to "Files", "reviews" to "Reviews", "commits" to "Commits").forEach { (id, label) ->
+                if (id != "files" || store.can("pull_files")) TextButton(onClick = { tab = id }) { Text(label, color = if (tab == id) p.accent else p.muted) }
+            }
+        }
+        pr?.takeIf { it.state == "open" || it.state == "draft" }?.let { pull ->
+            Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                PullActions(store, repo, pull.number, null, errands, SessionList.forPull(sessions.values, repo, pull.number), onPane)
+            }
+        }
         HorizontalDivider(color = p.line)
+        if (tab == "files") {
+            if (store.can("pull_files")) FilesScreen(store, repo, number)
+            else Text("This server or token cannot read pull request files.", Modifier.padding(16.dp), color = p.muted)
+            return@Column
+        }
         Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), contentAlignment = Alignment.TopCenter) {
             Column(Modifier.widthIn(max = 960.dp).fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 error?.let { Notice(it, p.danger) }
@@ -449,24 +442,13 @@ fun PullScreen(store: Store, repo: String, number: Int, onPane: (Pane?) -> Unit)
                     Text("${o.changedFiles} file${if (o.changedFiles == 1) "" else "s"}", style = MaterialTheme.typography.labelLarge, color = p.muted)
                     o.commitCount?.let { Text("$it commit${if (it == 1) "" else "s"}", style = MaterialTheme.typography.labelLarge, color = p.muted) }
                 }
-                if (o.state == "open" || o.state == "draft") PullActions(store, repo, o.number, null, errands, SessionList.forPull(sessions.values, repo, o.number), onPane)
 
-                body?.takeIf { it.isNotBlank() }?.let { Section("Description") { MarkdownText(it, style = MaterialTheme.typography.bodyMedium) } }
-
-                Section("Checks" + (o.checksSummary?.let { " · $it" } ?: "")) {
-                    if (o.checks.isEmpty()) Text("No checks reported.", color = p.muted)
-                    o.checks.forEach { c ->
-                        Row(
-                            Modifier.fillMaxWidth().clickable(enabled = c.url != null) { c.url?.let { openBeside(context, it) } }.padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Dot(if (c.failed) p.danger else if (c.passed) p.ok else if (c.pending) p.warn else p.muted)
-                            Text(c.name, Modifier.weight(1f).padding(start = 10.dp), style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(c.label, style = MaterialTheme.typography.labelMedium, color = p.muted)
-                        }
-                    }
+                if (tab == "overview") Section("Checks") {
+                    Text(o.checksSummary ?: "No checks reported.", style = MaterialTheme.typography.bodyMedium, color = p.muted)
                 }
-                Section("Reviews") {
+                if (tab == "overview") body?.takeIf { it.isNotBlank() }?.let { Section("Description") { MarkdownText(it, style = MaterialTheme.typography.bodyMedium) } }
+
+                if (tab == "overview" || tab == "reviews") Section("Reviews") {
                     if (o.reviews.isEmpty()) Text("No reviews yet.", color = p.muted)
                     o.reviews.forEach { r ->
                         Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -475,11 +457,11 @@ fun PullScreen(store: Store, repo: String, number: Int, onPane: (Pane?) -> Unit)
                         }
                     }
                 }
-                findings?.let { list ->
+                if (tab == "overview" || tab == "reviews") findings?.let { list ->
                     Section("Findings") {
                         if (list.isEmpty()) Text("No findings reported.", color = p.muted)
                         list.forEach { f ->
-                            Column(Modifier.fillMaxWidth().clickable(enabled = f.url != null) { f.url?.let { openBeside(context, it) } }.padding(vertical = 6.dp)) {
+                            Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(f.severity.uppercase(), style = MaterialTheme.typography.labelSmall, color = if (f.severity == "critical" || f.severity == "high") p.danger else p.warn)
                                     Text(f.title, Modifier.weight(1f).padding(start = 8.dp), style = MaterialTheme.typography.bodyMedium, color = p.ink)
@@ -492,18 +474,18 @@ fun PullScreen(store: Store, repo: String, number: Int, onPane: (Pane?) -> Unit)
                         }
                     }
                 }
-                if (o.issues.isNotEmpty()) Section("Closes") {
+                if (tab == "overview" && o.issues.isNotEmpty()) Section("Closes") {
                     o.issues.forEach { i ->
-                        Row(Modifier.fillMaxWidth().clickable(enabled = i.url != null) { i.url?.let { openBeside(context, it) } }.padding(vertical = 4.dp)) {
+                        Row(Modifier.fillMaxWidth().clickable(enabled = store.can("issue")) { onPane(Pane.Issue(repo, i.number)) }.padding(vertical = 4.dp)) {
                             Text("#${i.number}", style = MaterialTheme.typography.labelLarge, color = p.muted)
                             Text(i.title, Modifier.weight(1f).padding(start = 8.dp), style = MaterialTheme.typography.bodyMedium, color = p.ink)
                             Text(i.state, style = MaterialTheme.typography.labelSmall, color = if (i.state == "open") p.ok else p.muted)
                         }
                     }
                 }
-                if (o.commits.isNotEmpty()) Section("Commits") {
+                if ((tab == "overview" || tab == "commits") && o.commits.isNotEmpty()) Section("Commits") {
                     o.commits.forEach { c ->
-                        Row(Modifier.fillMaxWidth().clickable(enabled = c.url != null) { c.url?.let { openBeside(context, it) } }.padding(vertical = 3.dp)) {
+                        Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
                             Text(c.sha.take(7), style = MaterialTheme.typography.labelMedium.copy(fontFamily = Mono), color = p.muted)
                             Text(c.message, Modifier.padding(start = 10.dp), style = MaterialTheme.typography.bodySmall, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }

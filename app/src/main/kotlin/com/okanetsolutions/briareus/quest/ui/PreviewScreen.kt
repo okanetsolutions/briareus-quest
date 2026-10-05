@@ -2,7 +2,6 @@ package com.okanetsolutions.briareus.quest.ui
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.content.Intent
 import android.graphics.Bitmap
 import android.view.View
 import android.webkit.WebResourceRequest
@@ -16,13 +15,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,7 +33,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.net.toUri
 import com.okanetsolutions.briareus.core.PreviewAccess
 import com.okanetsolutions.briareus.quest.Store
 
@@ -51,6 +49,7 @@ fun PreviewScreen(store: Store, url: String) {
     var canGoBack by remember { mutableStateOf(false) }
     val browser = remember { PreviewBrowser(context) { now, back -> address = now; canGoBack = back } }
 
+    DisposableEffect(browser) { onDispose { browser.destroy() } }
     LaunchedEffect(url) { browser.access = store.previewAccess(); browser.load(url) }
     BackHandler(enabled = canGoBack) { browser.back() }
 
@@ -59,9 +58,7 @@ fun PreviewScreen(store: Store, url: String) {
             Text("▶ Run", style = MaterialTheme.typography.titleMedium, color = p.ink)
             Text(address, Modifier.weight(1f).padding(horizontal = 12.dp), style = MaterialTheme.typography.bodyMedium, color = p.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             IconButton(onClick = { browser.reload(url) }) { Icon(Icons.Outlined.Refresh, "Reload", tint = p.muted) }
-            IconButton(onClick = {
-                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, address.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)) }
-            }) { Icon(Icons.AutoMirrored.Outlined.OpenInNew, "Open in the browser", tint = p.muted) }
+
         }
         AndroidView({ browser.view }, Modifier.weight(1f).fillMaxWidth())
     }
@@ -87,6 +84,7 @@ private class PreviewBrowser(context: Context, onPage: (address: String, canGoBa
             // A load the page starts itself (a link, a redirect) has no headers of ours, so one to a preview host is
             // started again with them.
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                if (request.url.scheme != "https") return true
                 if (!request.isForMainFrame) return false
                 val headers = access?.headersFor(request.url.toString()).orEmpty()
                 if (headers.isEmpty()) return false
@@ -108,4 +106,6 @@ private class PreviewBrowser(context: Context, onPage: (address: String, canGoBa
     fun reload(fallback: String) = load(web.url ?: fallback)
 
     fun back() = web.goBack()
+
+    fun destroy() { web.stopLoading(); web.destroy() }
 }

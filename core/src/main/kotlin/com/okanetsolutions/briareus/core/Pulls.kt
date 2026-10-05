@@ -66,7 +66,7 @@ data class PullRow(val raw: JsonObject) {
 }
 
 /** A project's board: its open pull requests, as `GET /pulls` answers. */
-data class Board(val repo: String, val pulls: List<PullRow>, val syncedAt: Instant?) {
+data class Board(val repo: String, val pulls: List<PullRow>, val syncedAt: Instant?, val issues: List<Issue> = emptyList(), val issuesError: String? = null) {
     /** Every author on the board, sorted, for the filter. */
     val authors: List<String> get() = pulls.mapNotNull { it.author }.distinct().sortedBy { it.lowercase() }
 
@@ -82,7 +82,7 @@ data class Board(val repo: String, val pulls: List<PullRow>, val syncedAt: Insta
         fun parse(o: JsonObject): Board = Board(
             o.str("repo").orEmpty(),
             o.objects("pulls").filter { it.int("number") != null }.map(::PullRow),
-            parseTime(o.str("syncedAt")),
+            parseTime(o.str("syncedAt")), Issue.list(o), o.nonEmpty("issuesError"),
         )
     }
 }
