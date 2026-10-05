@@ -20,6 +20,7 @@ import org.junit.Test
 class FakeServer : Interceptor {
     data class Reply(val status: Int, val body: String, val type: String = "application/json", val headers: Map<String, String> = emptyMap())
 
+    val timeouts = ArrayList<Pair<Int, Long>>()
     val requests = ArrayList<Request>()
     val bodies = ArrayList<String>()
     val replies = ArrayDeque<Reply>()
@@ -29,6 +30,7 @@ class FakeServer : Interceptor {
     }
 
     override fun intercept(chain: Interceptor.Chain): Response {
+        timeouts += chain.readTimeoutMillis() to chain.call().timeout().timeoutNanos()
         val request = chain.request()
         requests += request
         bodies += request.body?.let { b -> Buffer().also { b.writeTo(it) }.readUtf8() }.orEmpty()
@@ -50,6 +52,33 @@ class ApiClientTest {
     private suspend fun expectError(block: suspend () -> Unit): ApiError {
         try { block() } catch (e: ApiError) { return e }
         fail("expected an ApiError"); throw AssertionError()
+    }
+
+    @Test fun runAllowsWorkspaceSetupToFinishWithoutRetryingTheWrite() = runTest {
+        server.reply(body = "{}")
+        client.call("serve_pull", args("repo" to "acme/web", "pr" to 42))
+        assertEquals("POST", server.requests.single().method)
+        assertEquals("https://b.example/api/v1/pulls/42/serve", server.requests.single().url.toString())
+        assertEquals("{\"repo\":\"acme/web\"}", server.bodies.single())
+        assertEquals(170_000 to 170_000_000_000L, server.timeouts.single())
+        server.reply(status = 504, body = "{\"error\":\"Still preparing\"}")
+        assertEquals(504, expectError { client.call("serve_pull", args("repo" to "acme/web", "pr" to 42)) }.status)
+        assertEquals(2, server.requests.size)
+    }
+
+    @Test fun codeReviewUsesTheCurrentBranchAndReviewSessionFlagWithoutRetrying() = runTest {
+        server.reply(body = """{"pr":{"number":42,"state":"open","headRef":"feature/current"}}""")
+        val arguments = PullReviewStart.arguments("acme/web", 42, client.call("pull", args("repo" to "acme/web", "pr" to 42)))
+        assertEquals("https://b.example/api/v1/pulls/42?repo=acme%2Fweb", server.requests.last().url.toString())
+        server.reply(body = """{"session":{"id":"review-session","repo":"acme/web"}}""")
+        val result = client.call("review", arguments)
+        assertEquals("review-session", Session.parse(result["session"])?.id)
+        assertEquals("POST", server.requests.last().method)
+        assertEquals("https://b.example/api/v1/sessions", server.requests.last().url.toString())
+        assertEquals(args("repo" to "acme/web", "prNumber" to 42, "branch" to "feature/current", "review" to true), BriareusJson.parseToJsonElement(server.bodies.last()))
+        server.reply(status = 504, body = """{"error":"Review start timed out"}""")
+        assertEquals(504, expectError { client.call("review", arguments) }.status)
+        assertEquals(3, server.requests.size)
     }
 
     @Test fun refusesABadToken() {

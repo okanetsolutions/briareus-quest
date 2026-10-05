@@ -19,7 +19,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.CallEnd
 import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.CheckCircle
@@ -67,6 +66,9 @@ import kotlinx.coroutines.delay
 fun VoiceScreen(voice: VoiceSession, settings: VoiceSettings, onStart: () -> Unit) {
     val p = LocalPalette.current
     val phase by voice.phase.collectAsState()
+    val projects by voice.projects.collectAsState()
+    val project by voice.project.collectAsState()
+    var choosingProject by remember { mutableStateOf(false) }
     val lines by voice.lines.collectAsState()
     val steps by voice.steps.collectAsState()
     val notice by voice.notice.collectAsState()
@@ -79,6 +81,17 @@ fun VoiceScreen(voice: VoiceSession, settings: VoiceSettings, onStart: () -> Uni
             Text("Voice", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = p.ink)
             IconButton(onClick = { settingsOpen = true }) { Icon(Icons.Outlined.Tune, "Voice settings", tint = p.muted) }
         }
+        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+            OutlinedButton(onClick = { choosingProject = true }, enabled = phase == VoiceSession.Phase.OFF) {
+                Text(project?.title ?: "Select a project")
+            }
+            DropdownMenu(choosingProject, onDismissRequest = { choosingProject = false }) {
+                projects.forEach { choice ->
+                    DropdownMenuItem(text = { Text(choice.title) }, onClick = { choosingProject = false; voice.selectProject(choice.repo) })
+                }
+            }
+        }
+        if (phase != VoiceSession.Phase.OFF) Text("${project?.repo.orEmpty()} · End the conversation to switch project", Modifier.padding(16.dp), color = p.muted)
         HorizontalDivider(color = p.line)
 
         val list = rememberLazyListState()
@@ -103,7 +116,6 @@ fun VoiceScreen(voice: VoiceSession, settings: VoiceSettings, onStart: () -> Uni
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         when (val s = step.state) {
                             VoiceSession.Step.State.Running -> CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                            VoiceSession.Step.State.Waiting -> Icon(Icons.AutoMirrored.Outlined.HelpOutline, "Waiting for your yes", Modifier.size(18.dp), tint = p.warn)
                             VoiceSession.Step.State.Done -> Icon(Icons.Outlined.CheckCircle, "Done", Modifier.size(18.dp), tint = p.ok)
                             is VoiceSession.Step.State.Failed -> Icon(Icons.Outlined.Cancel, s.why, Modifier.size(18.dp), tint = p.danger)
                         }
@@ -127,7 +139,7 @@ private fun Intro(hasKey: Boolean, onSettings: () -> Unit) {
         Text(
             "Ask what a conversation is doing, answer an agent, start one or stop one, and have the windows follow: " +
                 "“show me this pull request”, “open the login conversation beside this one”, “show the website's pull requests”. " +
-                "Changes on the server are read back and wait for your yes.",
+                "Choose the project first. Requested actions run immediately; everything stays in the app.",
             style = MaterialTheme.typography.bodyMedium, color = p.muted,
         )
         if (!hasKey) OutlinedButton(onClick = onSettings) { Text("Add your OpenAI API key") }
@@ -137,6 +149,7 @@ private fun Intro(hasKey: Boolean, onSettings: () -> Unit) {
 @Composable
 private fun Controls(voice: VoiceSession, phase: VoiceSession.Phase, hasKey: Boolean, notice: String?, onStart: () -> Unit) {
     val p = LocalPalette.current
+    val project by voice.project.collectAsState()
     val muted by voice.muted.collectAsState()
     val speaking by voice.speaking.collectAsState()
     val started by voice.started.collectAsState()
@@ -150,7 +163,7 @@ private fun Controls(voice: VoiceSession, phase: VoiceSession.Phase, hasKey: Boo
             IconButton(onClick = voice::toggleMute, enabled = phase == VoiceSession.Phase.LIVE, modifier = Modifier.size(56.dp).background(p.raise, CircleShape)) {
                 Icon(if (muted) Icons.Outlined.MicOff else Icons.Outlined.Mic, if (muted) "Unmute" else "Mute", tint = if (muted) p.danger else p.ink)
             }
-            val enabled = phase != VoiceSession.Phase.CLOSING && (on || hasKey)
+            val enabled = phase != VoiceSession.Phase.CLOSING && (on || (hasKey && project != null))
             Box(
                 Modifier.size(84.dp).scale(pulse).background(if (on) p.danger else if (enabled) p.accent else p.field, CircleShape)
                     .clickable(enabled = enabled) { if (on) voice.stop() else onStart() },
@@ -167,7 +180,7 @@ private fun Controls(voice: VoiceSession, phase: VoiceSession.Phase, hasKey: Boo
         }
         Text(
             when (phase) {
-                VoiceSession.Phase.OFF -> if (hasKey) "Tap to talk" else "Add an OpenAI API key in the voice settings"
+                VoiceSession.Phase.OFF -> if (!hasKey) "Add an OpenAI API key in the voice settings" else if (project == null) "Select a project" else "Tap to talk about ${project!!.title}"
                 VoiceSession.Phase.CONNECTING -> "Connecting…"
                 VoiceSession.Phase.CLOSING -> "Ending…"
                 VoiceSession.Phase.LIVE -> (if (muted) "Muted" else if (speaking) "Speaking" else "Listening") + (started?.let { " · " + elapsed(it) }.orEmpty())
@@ -243,7 +256,6 @@ fun VoiceSettingsDialog(settings: VoiceSettings, onDismiss: () -> Unit) {
 /** What the step does, in a few words. */
 private val VoiceSession.Step.title: String
     get() {
-        val waiting = state == VoiceSession.Step.State.Waiting
         fun n(key: String) = input[key]?.toString()?.trim('"').orEmpty()
         fun s(key: String) = (input[key] as? kotlinx.serialization.json.JsonPrimitive)?.content.orEmpty()
         return when (tool) {
@@ -251,22 +263,22 @@ private val VoiceSession.Step.title: String
             VoiceTool.READ_CONVERSATION -> "Read a conversation"
             VoiceTool.LIST_PULL_REQUESTS -> "Read the pull requests"
             VoiceTool.READ_PULL_REQUEST -> "Read the changes of #${n("number")}"
-            VoiceTool.MERGE_PULL_REQUEST -> (if (waiting) "Asked to merge #" else "Merge #") + n("number")
+            VoiceTool.START_CODE_REVIEW -> "Start Code review on #" + n("number")
             VoiceTool.WAITING_FINDINGS -> "Read the findings waiting"
             VoiceTool.LIST_ISSUES -> "Read the issues"
             VoiceTool.READ_ISSUE -> "Read issue #${n("issue")}"
-            VoiceTool.START_CONVERSATION -> (if (waiting) "Asked to start an agent: " else "Start an agent: ") + s("prompt")
-            VoiceTool.WORK_ON_ISSUE -> (if (waiting) "Asked to work on issue #" else "Work on issue #") + n("issue")
-            VoiceTool.SEND_MESSAGE -> (if (waiting) "Asked to send: " else "Send: ") + s("text")
-            VoiceTool.STOP_CONVERSATION -> if (waiting) "Asked to stop an agent" else "Stop an agent"
+            VoiceTool.START_CONVERSATION -> "Start an agent: " + s("prompt")
+            VoiceTool.WORK_ON_ISSUE -> "Work on issue #" + n("issue")
+            VoiceTool.SEND_MESSAGE -> "Send: " + s("text")
+            VoiceTool.STOP_CONVERSATION -> "Stop an agent"
             VoiceTool.READ_SCREEN -> "Look at the screen"
             VoiceTool.SHOW_CONVERSATION -> "Show a conversation"
             VoiceTool.SHOW_PULL_REQUESTS -> "Show the pull requests"
             VoiceTool.SHOW_PULL_REQUEST -> "Show pull request" + (n("number").takeIf { it.isNotEmpty() }?.let { " #$it" } ?: "")
+            VoiceTool.SHOW_ISSUES -> "Show issues"
             VoiceTool.SHOW_ISSUE -> "Show issue #${n("issue")}"
             VoiceTool.SHOW_PREVIEW -> "Show the running app"
             VoiceTool.SHOW_NEW_CONVERSATION -> "Show the new conversation form"
-            VoiceTool.SHOW_STATUS_PANEL -> "Show the status panel"
             VoiceTool.GO_HOME -> "Show the conversation list"
             null -> name
         }

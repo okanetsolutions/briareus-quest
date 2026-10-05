@@ -16,7 +16,7 @@ see `Windows.kt`), which is what makes it sit beside other apps.
   Everything that can be a rule lives here so it is tested without a device.
 - `app/` is Android. `Store` (one per process, `context.store`) owns the connection, the project and session state flows,
   the `GET /events` stream and the per-conversation streams; screens read its flows and call its methods. The
-  `EventsService` uses the same `Store` while the app is in the background.
+  `VoiceService` keeps the same `Store` current during an active call; there is no background alert service.
 
 **Server calls.** `Routes.all` is the single table of what the app calls (`ApiRoute(name, method, path, ...)`).
 `ApiClient.call("name", args(...))` sends one by name; `Store.mutate` wraps a write and turns failures into a user

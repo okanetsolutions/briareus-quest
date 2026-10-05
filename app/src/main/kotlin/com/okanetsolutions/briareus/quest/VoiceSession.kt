@@ -4,11 +4,12 @@ import android.content.Context
 import com.okanetsolutions.briareus.core.ApiClient
 import com.okanetsolutions.briareus.core.ApiError
 import com.okanetsolutions.briareus.core.BriareusJson
+import com.okanetsolutions.briareus.core.Project
 import com.okanetsolutions.briareus.core.Session
 import com.okanetsolutions.briareus.core.Voice
 import com.okanetsolutions.briareus.core.VoiceContext
 import com.okanetsolutions.briareus.core.VoiceCost
-import com.okanetsolutions.briareus.core.VoiceMerge
+import com.okanetsolutions.briareus.core.PullReviewStart
 import com.okanetsolutions.briareus.core.VoicePlan
 import com.okanetsolutions.briareus.core.VoiceTool
 import com.okanetsolutions.briareus.core.args
@@ -35,7 +36,7 @@ import java.util.UUID
 /**
  * One spoken conversation with GPT-Realtime: the call, the captions, and the tools it calls, on the server and on the
  * windows. It outlives the panel that started it, so it goes on while you look at another app, and ends when you end it
- * or after a silence. A change on the server goes through only on a yes heard after it was read back.
+ * or after a silence. Tools and context stay inside the selected project, and requested writes run directly.
  */
 class VoiceSession(context: Context, private val store: Store, private val navigator: Navigator, private val settings: VoiceSettings) {
     private val context = context.applicationContext
@@ -46,10 +47,21 @@ class VoiceSession(context: Context, private val store: Store, private val navig
     data class Step(val tool: VoiceTool?, val name: String, val input: JsonObject, val state: State, val id: String = UUID.randomUUID().toString()) {
         sealed interface State {
             data object Running : State
-            data object Waiting : State
             data object Done : State
             data class Failed(val why: String) : State
         }
+    }
+
+    val projects = store.projects
+    private val _project = MutableStateFlow<Project?>(null)
+    val project: StateFlow<Project?> = _project.asStateFlow()
+
+    /** A live conversation cannot carry its transcript or tool context into a different project. */
+    fun selectProject(repo: String) {
+        if (isOn) return
+        val selected = store.projects.value.firstOrNull { it.repo == repo } ?: return
+        if (_project.value?.repo != repo) { _lines.value = emptyList(); _steps.value = emptyList(); _notice.value = null; _cost.value = null }
+        _project.value = selected
     }
 
     private val _phase = MutableStateFlow(Phase.OFF)
@@ -79,30 +91,41 @@ class VoiceSession(context: Context, private val store: Store, private val navig
     private var watchdog: Job? = null
     private var lastActivity = 0L
     private var meter = VoiceCost()
-    /** How many pieces of the user's speech have been heard: a yes must come after the read-back it answers. */
-    private var heard = 0
     /** The function calls of each response, by response id, answered together once the response is done. */
     private val calls = HashMap<String, MutableList<Deferred<Pair<String, String>>>>()
     private val seenCalls = HashSet<String>()
-    /** The changes read back to the user, with how much had been heard at the time. */
-    private val readBacks = HashMap<String, Int>()
-    /** The merges read back, by the same key: the call pinned to the head the user heard about, and its base. */
-    private val merges = HashMap<String, Pair<JsonObject, String>>()
     private var sequence = 0
 
     val isOn: Boolean get() = _phase.value != Phase.OFF
 
+    init {
+        store.scope.launch {
+            var connection = store.connection.value?.let { it.address.origin to it.device.id }
+            store.connection.collect { current ->
+                val identity = current?.let { it.address.origin to it.device.id }
+                if (identity != connection) {
+                    stop()
+                    _project.value = null; _lines.value = emptyList(); _steps.value = emptyList()
+                    connection = identity
+                }
+            }
+        }
+    }
+
     fun start() {
         if (_phase.value != Phase.OFF) return
         _notice.value = null
+        val selected = _project.value?.let { p -> store.projects.value.firstOrNull { it.repo == p.repo } }
+            ?: run { _notice.value = "Select a project to talk about."; return }
         val key = settings.key() ?: run { _notice.value = "Add your OpenAI API key in the voice settings."; return }
         if (store.client == null) { _notice.value = "Pair with a Briareus server first."; return }
+        _project.value = selected
         _phase.value = Phase.CONNECTING
         _lines.value = emptyList(); _steps.value = emptyList(); _muted.value = false; _started.value = null
-        heard = 0; calls.clear(); seenCalls.clear(); readBacks.clear(); merges.clear()
+        calls.clear(); seenCalls.clear()
         meter = VoiceCost(); _cost.value = null
         val call = RealtimeCall(context).also { call = it }
-        val session = Voice.session(settings.voice.value, store.projects.value)
+        val session = Voice.session(settings.voice.value, selected)
         VoiceService.start(context)
         reader = store.scope.launch {
             try {
@@ -159,7 +182,7 @@ class VoiceSession(context: Context, private val store: Store, private val navig
                 watch()
             }
             // A piece of the user's speech the model hears, transcribed or not.
-            "input_audio_buffer.committed" -> { heard++; touch() }
+            "input_audio_buffer.committed" -> touch()
             "conversation.item.input_audio_transcription.completed" -> {
                 caption(user = true, event.str("transcript"))
                 meter.addTranscription(event.obj("usage")); _cost.value = meter.line
@@ -255,34 +278,21 @@ class VoiceSession(context: Context, private val store: Store, private val navig
         fun fail(why: String) = finish(Step.State.Failed(why), args("error" to why))
         val tool = step.tool ?: return fail("There is no tool named ${step.name}.")
         val context = voiceContext()
-        val key = Voice.readBackKey(tool, step.input)
-        var plan = tool.plan(step.input, context)
-        // A change goes through only on a yes the user said after hearing it read back; the model's word is not enough.
-        if (plan is VoicePlan.Call && tool.changes && readBacks[key]?.let { heard > it } != true) {
-            plan = tool.plan(JsonObject(step.input + ("confirmed" to JsonPrimitive(false))), context)
-        }
-        if (tool == VoiceTool.MERGE_PULL_REQUEST && plan !is VoicePlan.Refuse) {
-            val (state, answer) = merge(step, confirmed = plan is VoicePlan.Call, key = key, plan = plan)
-            return finish(state, answer)
-        }
+        val plan = tool.plan(step.input, context)
         return when (plan) {
             is VoicePlan.Refuse -> fail(plan.why)
-            is VoicePlan.Confirm -> {
-                readBacks[key] = heard
-                finish(Step.State.Waiting, confirmation(plan.readBack, "Read this back to the user."))
-            }
             is VoicePlan.Show -> try {
                 finish(Step.State.Done, args("done" to true, "on_screen" to navigator.show(plan.action)))
             } catch (e: Exception) {
                 fail(e.message ?: "That could not be shown.")
             }
-            VoicePlan.ReadScreen -> finish(Step.State.Done, navigator.screen())
-            is VoicePlan.Call -> call(step, tool, plan.arguments, key, ::finish, ::fail)
+            VoicePlan.ReadScreen -> finish(Step.State.Done, navigator.screen(context.project!!.repo))
+            is VoicePlan.Call -> call(step, tool, plan.arguments, ::finish, ::fail)
         }
     }
 
     private suspend fun call(
-        step: Step, tool: VoiceTool, planned: JsonObject, key: String,
+        step: Step, tool: VoiceTool, planned: JsonObject,
         finish: (Step.State, JsonObject) -> String, fail: (String) -> String,
     ): String {
         val operation = tool.operation ?: return fail("That is not a server call.")
@@ -296,10 +306,12 @@ class VoiceSession(context: Context, private val store: Store, private val navig
                 arguments = Voice.issueStart(client.call("pulls", args("repo" to repo), TIMEOUT), number, repo)
                     ?: return fail("Issue #$number is not open on ${store.projectTitle(repo)}.")
             }
+            if (tool == VoiceTool.START_CODE_REVIEW) {
+                arguments = reviewArguments(client, planned)
+            }
             val answer = client.call(operation, arguments, TIMEOUT)
             val full = if (tool == VoiceTool.READ_ISSUE && store.can("issue_timeline")) JsonObject(answer + ("timeline" to timeline(client, arguments))) else answer
             Session.parse(answer["session"])?.let { if (tool.changes) store.upsert(it) }
-            readBacks.remove(key)
             val repo = planned.str("repo")
             val sessions = if (tool.readsConversations) store.sessions.value.values.filter { it.repo == repo } else emptyList()
             finish(Step.State.Done, tool.summary(full, step.input, sessions, store::projectTitle))
@@ -311,6 +323,11 @@ class VoiceSession(context: Context, private val store: Store, private val navig
         } catch (e: Exception) {
             fail(e.message ?: "The call failed.")
         }
+    }
+
+    private suspend fun reviewArguments(client: ApiClient, planned: JsonObject): JsonObject {
+        check(store.can("pull")) { "This headset's token cannot read the pull request to review." }
+        return PullReviewStart.arguments(planned.str("repo").orEmpty(), planned.int("pr") ?: 0, client.call("pull", planned, TIMEOUT))
     }
 
     /** An issue's comments are on its timeline, oldest first: a few of its pages are read, for the latest. */
@@ -326,55 +343,14 @@ class VoiceSession(context: Context, private val store: Store, private val navig
         return JsonArray(rows)
     }
 
-    /** What a change answers before the user's yes: what to read back, and that only a yes lets it through. */
-    private fun confirmation(readBack: String, how: String) =
-        args("needs_confirmation" to true, "read_back" to readBack, "next" to "$how Call again with confirmed=true only if they say yes.")
-
-    /**
-     * Merges a pull request: the first call reads it and reads back what stands in the way; the confirmed one merges the
-     * head the user heard about, so a push in between makes GitHub refuse it.
-     */
-    private suspend fun merge(step: Step, confirmed: Boolean, key: String, plan: VoicePlan): Pair<Step.State, JsonObject> {
-        fun failed(why: String) = Step.State.Failed(why) to args("error" to why)
-        if (!store.can("merge_pull") || !store.can("pull")) return failed("This headset's token cannot merge pull requests on the server.")
-        val client = store.client ?: return failed("The headset is not connected to a server.")
-        val place = when (plan) {
-            is VoicePlan.Call -> plan.arguments
-            // The unconfirmed plan only says what to read back; where the pull request is comes from a confirmed one.
-            else -> (step.tool!!.plan(JsonObject(step.input + ("confirmed" to JsonPrimitive(true))), voiceContext()) as? VoicePlan.Call)?.arguments
-                ?: return failed("The pull request could not be found.")
-        }
-        val repo = place.str("repo").orEmpty()
-        val number = place.int("pr") ?: return failed("number is missing.")
-        return try {
-            val held = merges[key]
-            if (confirmed && held != null) {
-                val answer = client.call("merge_pull", held.first, TIMEOUT)
-                readBacks.remove(key); merges.remove(key)
-                store.scope.launch { runCatching { store.refresh() } }
-                Step.State.Done to VoiceTool.MERGE_PULL_REQUEST.summary(answer, JsonObject(step.input + ("base" to JsonPrimitive(held.second))))
-            } else {
-                val pull = client.call("pull", place)
-                val files = if (store.can("pull_files")) runCatching { client.call("pull_files", place) }.getOrNull() else null
-                val board = if (store.can("pulls")) runCatching { client.call("pulls", args("repo" to repo)) }.getOrNull() else null
-                val row = board?.objects("pulls")?.firstOrNull { it.int("number") == number }
-                when (val check = VoiceMerge.check(number, repo, pull, files, row)) {
-                    is VoiceMerge.Refuse -> failed(check.why)
-                    is VoiceMerge.Ready -> {
-                        readBacks[key] = heard
-                        merges[key] = check.arguments to check.base
-                        Step.State.Waiting to confirmation(check.readBack, "Read all of this to the user.")
-                    }
-                }
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            failed((e as? ApiError)?.description ?: e.message ?: "The call failed.")
-        }
+    private fun voiceContext(): VoiceContext {
+        val selected = _project.value?.takeIf { p -> store.projects.value.any { it.repo == p.repo } }
+        val repo = selected?.repo
+        return VoiceContext(
+            selected, store.sessions.value.filterValues { it.repo == repo },
+            navigator.onScreen()?.takeIf { it.repo == repo }, navigator.pullOnScreen()?.takeIf { it.first == repo },
+        )
     }
-
-    private fun voiceContext() = VoiceContext(store.projects.value, store.sessions.value, navigator.onScreen(), navigator.pullOnScreen())
 
     private companion object {
         const val TIMEOUT = 60_000L

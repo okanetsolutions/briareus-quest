@@ -112,15 +112,6 @@ class Conversation(private val store: Store, val id: String) {
         }
     }
 
-    /** Reads the lines after the cursor once, without a stream: what a notification needs to offer the agent's options. */
-    suspend fun catchUp() {
-        val client = store.client ?: return
-        runCatching { client.call("session", args("sessionId" to id, "since" to transcript.cursor)) }.onSuccess { r ->
-            if (transcript.append(r["events"] as? JsonArray)) publish()
-            _loading.value = false
-        }
-    }
-
     /** The question the agent waits on, if any. */
     fun pendingQuestion(): TranscriptEvent? = transcript.pendingQuestion()
 }

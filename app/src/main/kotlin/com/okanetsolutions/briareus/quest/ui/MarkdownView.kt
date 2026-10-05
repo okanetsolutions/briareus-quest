@@ -33,6 +33,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import com.okanetsolutions.briareus.core.NativeLinks
+import com.okanetsolutions.briareus.quest.app
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
@@ -135,7 +140,9 @@ private fun CodeBlock(block: Block.Code) {
 @Composable
 fun inline(text: String): AnnotatedString {
     val p = LocalPalette.current
-    return remember(text, p) {
+    val app = LocalContext.current.app
+    val projects by app.store.projects.collectAsState()
+    return remember(text, p, projects) {
         buildAnnotatedString {
             for (span in Inline.parse(text)) {
                 val style = SpanStyle(
@@ -146,9 +153,11 @@ fun inline(text: String): AnnotatedString {
                     background = if (span.code) p.field else androidx.compose.ui.graphics.Color.Unspecified,
                     fontSize = if (span.code) 0.9.em else androidx.compose.ui.unit.TextUnit.Unspecified,
                 )
-                val link = span.link
-                if (link != null) {
-                    withLink(LinkAnnotation.Url(link, TextLinkStyles(SpanStyle(color = p.accent, textDecoration = TextDecoration.Underline)))) {
+                val action = span.link?.let { NativeLinks.resolve(it, projects.map { project -> project.repo }.toSet()) }
+                if (action != null) {
+                    withLink(LinkAnnotation.Clickable(span.link.orEmpty(), TextLinkStyles(SpanStyle(color = p.accent, textDecoration = TextDecoration.Underline))) {
+                        runCatching { app.navigator.show(action) }.onFailure { app.store.failed(it) }
+                    }) {
                         withStyle(style) { append(span.text) }
                     }
                 } else {

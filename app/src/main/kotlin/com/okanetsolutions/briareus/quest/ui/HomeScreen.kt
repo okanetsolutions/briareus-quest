@@ -19,20 +19,17 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.automirrored.outlined.MergeType
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
@@ -48,6 +45,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import com.okanetsolutions.briareus.quest.Windows
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.okanetsolutions.briareus.core.Session
@@ -62,7 +61,9 @@ sealed interface Pane {
     data class New(val repo: String? = null, val prompt: String? = null) : Pane
     data class Open(val sessionId: String) : Pane
     data class Pulls(val repo: String) : Pane
-    data class Pull(val repo: String, val number: Int) : Pane
+    data class Pull(val repo: String, val number: Int, val view: String? = null) : Pane
+    data class Issues(val repo: String) : Pane
+    data class Issue(val repo: String, val number: Int) : Pane
 }
 
 /**
@@ -75,12 +76,10 @@ fun HomeScreen(
     pane: Pane?,
     onPane: (Pane?) -> Unit,
     onPopOut: (String) -> Unit,
-    onStatusWindow: () -> Unit,
     voiceOn: Boolean,
     onVoiceWindow: () -> Unit,
-    onBackgroundAlerts: (Boolean) -> Unit,
 ) {
-    val header = SidebarHeader(onStatusWindow, voiceOn, onVoiceWindow, onBackgroundAlerts)
+    val header = SidebarHeader(voiceOn, onVoiceWindow)
     val p = LocalPalette.current
     BoxWithConstraints(Modifier.fillMaxSize().background(p.canvas)) {
         if (maxWidth >= 900.dp) {
@@ -98,7 +97,7 @@ fun HomeScreen(
 }
 
 @Composable
-private fun Detail(store: Store, pane: Pane, onPane: (Pane?) -> Unit, onPopOut: (String) -> Unit, back: (() -> Unit)?) {
+fun Detail(store: Store, pane: Pane, onPane: (Pane?) -> Unit, onPopOut: (String) -> Unit, back: (() -> Unit)?) {
     when (pane) {
         is Pane.New -> Column {
             if (back != null) TextButton(onClick = back, modifier = Modifier.padding(8.dp)) { Text("← Conversations") }
@@ -106,12 +105,14 @@ private fun Detail(store: Store, pane: Pane, onPane: (Pane?) -> Unit, onPopOut: 
         }
         is Pane.Open -> ConversationScreen(store, pane.sessionId, onBack = back, onPopOut = { onPopOut(pane.sessionId) }, onDeleted = { onPane(null) })
         is Pane.Pulls -> PullsScreen(store, pane.repo, onPane, back)
-        is Pane.Pull -> PullScreen(store, pane.repo, pane.number, onPane)
+        is Pane.Pull -> PullScreen(store, pane.repo, pane.number, onPane, pane.view)
+        is Pane.Issues -> IssuesScreen(store, pane.repo, onPane, back)
+        is Pane.Issue -> IssueScreen(store, pane.repo, pane.number, onPane)
     }
 }
 
-/** What the sidebar's header opens: the status panel, the voice panel and the settings. */
-private class SidebarHeader(val onStatusWindow: () -> Unit, val voiceOn: Boolean, val onVoiceWindow: () -> Unit, val onBackgroundAlerts: (Boolean) -> Unit)
+/** The sidebar's voice control. */
+private class SidebarHeader(val voiceOn: Boolean, val onVoiceWindow: () -> Unit)
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -119,6 +120,7 @@ private fun Sidebar(
     store: Store, pane: Pane?, onPane: (Pane?) -> Unit, header: SidebarHeader, modifier: Modifier,
 ) {
     val p = LocalPalette.current
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val projects by store.projects.collectAsState()
     val sessions by store.sessions.collectAsState()
@@ -136,8 +138,7 @@ private fun Sidebar(
             IconButton(onClick = header.onVoiceWindow) {
                 Icon(Icons.Outlined.GraphicEq, if (header.voiceOn) "Voice conversation on" else "Talk to Briareus", tint = if (header.voiceOn) p.accent else p.muted)
             }
-            IconButton(onClick = header.onStatusWindow) { Icon(Icons.Outlined.Dashboard, "Open the status panel", tint = p.muted) }
-            SettingsMenu(store, header.onBackgroundAlerts)
+            SettingsMenu(store)
         }
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).background(p.accent, RoundedCornerShape(10.dp))
@@ -166,6 +167,7 @@ private fun Sidebar(
                                 group.project.title, Modifier.weight(1f).padding(start = 6.dp), style = MaterialTheme.typography.titleSmall,
                                 color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
                             )
+                            IconButton(onClick = { Windows.openVoice(context, repo) }) { Icon(Icons.Outlined.GraphicEq, "Talk about ${group.project.title}", tint = p.muted) }
                             if (group.working) Dot(p.warn, Modifier.padding(end = 8.dp))
                             if (group.needsYou > 0) Text("${group.needsYou}", Modifier.padding(end = 8.dp), style = MaterialTheme.typography.labelMedium, color = p.accent)
                             Text("${group.sessions.size}", style = MaterialTheme.typography.labelMedium, color = p.muted)
@@ -181,6 +183,11 @@ private fun Sidebar(
                         ) {
                             Icon(Icons.AutoMirrored.Outlined.MergeType, null, Modifier.size(18.dp), tint = p.muted)
                             Text("Pull requests", Modifier.padding(start = 12.dp), style = MaterialTheme.typography.bodyMedium, color = p.ink)
+                        }
+                    }
+                    if (!isCollapsed && store.can("pulls")) item(key = "issues:$repo") {
+                        TextButton(onClick = { onPane(Pane.Issues(repo)) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                            Text("Issues", color = if ((pane as? Pane.Issues)?.repo == repo || (pane as? Pane.Issue)?.repo == repo) p.accent else p.ink)
                         }
                     }
                     if (!isCollapsed) items(group.sessions, key = { it.id }) { s ->
@@ -215,12 +222,10 @@ private fun SessionRow(s: Session, selected: Boolean, now: Instant, onClick: () 
 }
 
 @Composable
-private fun SettingsMenu(store: Store, onBackgroundAlerts: (Boolean) -> Unit) {
+private fun SettingsMenu(store: Store) {
     val p = LocalPalette.current
     val connection by store.connection.collectAsState()
     var open by remember { mutableStateOf(false) }
-    var alerts by remember { mutableStateOf(store.backgroundAlerts) }
-    var confirmForget by remember { mutableStateOf<Boolean?>(null) }
     Box {
         IconButton(onClick = { open = true }) { Icon(Icons.Outlined.Settings, "Settings", tint = p.muted) }
         DropdownMenu(open, onDismissRequest = { open = false }) {
@@ -231,27 +236,8 @@ private fun SettingsMenu(store: Store, onBackgroundAlerts: (Boolean) -> Unit) {
                 }
                 HorizontalDivider(color = p.line)
             }
-            DropdownMenuItem(
-                text = { Text("Notify me while I'm in other apps") },
-                trailingIcon = { Switch(alerts, null) },
-                onClick = { alerts = !alerts; onBackgroundAlerts(alerts) },
-            )
-            DropdownMenuItem(text = { Text("Forget this connection") }, onClick = { open = false; confirmForget = false })
-            DropdownMenuItem(text = { Text("Revoke the token and forget", color = p.danger) }, onClick = { open = false; confirmForget = true })
+            DropdownMenuItem(text = { Text("Forget this connection") }, onClick = { open = false; store.forget() })
+            DropdownMenuItem(text = { Text("Revoke the token and forget", color = p.danger) }, onClick = { open = false; store.forget(revoke = true) })
         }
-    }
-    confirmForget?.let { revoke ->
-        AlertDialog(
-            onDismissRequest = { confirmForget = null },
-            title = { Text(if (revoke) "Revoke this headset's token?" else "Forget this connection?") },
-            text = {
-                Text(
-                    if (revoke) "The token stops working on the server and everything saved here is erased. Running agents keep running."
-                    else "The token and saved conversations are erased from this headset. The token itself keeps working until it is revoked on the server, and running agents keep running.",
-                )
-            },
-            confirmButton = { TextButton(onClick = { confirmForget = null; store.forget(revoke) }) { Text(if (revoke) "Revoke" else "Forget", color = p.danger) } },
-            dismissButton = { TextButton(onClick = { confirmForget = null }) { Text("Cancel") } },
-        )
     }
 }

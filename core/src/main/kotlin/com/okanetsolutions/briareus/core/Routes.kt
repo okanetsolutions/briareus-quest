@@ -17,6 +17,7 @@ data class ApiRoute(
     val set: String? = null,
     val filter: String? = null,
     val list: String? = null,
+    val timeoutMs: Long? = null,
 )
 
 object Routes {
@@ -38,7 +39,7 @@ object Routes {
         ApiRoute("pull_files", "GET", "pulls/{pr}/files"),
         ApiRoute("findings", "GET", "pulls/{pr}/findings"),
         ApiRoute("merge_pull", "POST", "pulls/{pr}/merge"),
-        ApiRoute("serve_pull", "POST", "pulls/{pr}/serve"),
+        ApiRoute("serve_pull", "POST", "pulls/{pr}/serve", timeoutMs = 170_000L),
         // The Cloudflare Access service token ▶ Run's preview hosts take, so the preview opens without a sign-in.
         ApiRoute("preview_access", "GET", "preview/access"),
         // Issues. Their comments are on the timeline, 100 a `page`, oldest first.
@@ -47,6 +48,7 @@ object Routes {
         // Sessions. The list has no project parameter: a `repo` argument cuts the answer down here instead.
         ApiRoute("sessions", "GET", "sessions", filter = "repo", list = "sessions"),
         ApiRoute("start_session", "POST", "sessions"),
+        ApiRoute("review", "POST", "sessions", set = "review"),
         ApiRoute("session", "GET", "sessions/{sessionId}"),
         ApiRoute("session_events", "GET", "sessions/{sessionId}/events"),
         ApiRoute("delete", "DELETE", "sessions/{sessionId}"),

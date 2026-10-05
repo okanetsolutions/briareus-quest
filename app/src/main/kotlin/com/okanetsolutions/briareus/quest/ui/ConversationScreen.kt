@@ -1,7 +1,5 @@
 package com.okanetsolutions.briareus.quest.ui
 
-import android.content.Intent
-import androidx.core.net.toUri
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -34,7 +32,6 @@ import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Stop
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -75,7 +72,6 @@ import com.okanetsolutions.briareus.core.SessionList
 import com.okanetsolutions.briareus.core.TranscriptEvent
 import com.okanetsolutions.briareus.core.Triage
 import com.okanetsolutions.briareus.core.args
-import com.okanetsolutions.briareus.quest.Notifier
 import com.okanetsolutions.briareus.quest.Store
 import com.okanetsolutions.briareus.quest.Windows
 import kotlinx.coroutines.Dispatchers
@@ -126,7 +122,6 @@ fun ConversationScreen(store: Store, sessionId: String, onBack: (() -> Unit)?, o
     DisposableEffect(sessionId) {
         val release = conversation.watch()
         store.visibleSessions.value += sessionId
-        Notifier.cancel(context, sessionId)
         onDispose {
             release()
             store.visibleSessions.value -= sessionId
@@ -140,10 +135,9 @@ fun ConversationScreen(store: Store, sessionId: String, onBack: (() -> Unit)?, o
         return
     }
 
-    var confirmDelete by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize().background(p.canvas)) {
-        Header(store, session, onBack, onPopOut, onDelete = { confirmDelete = true }, onReload = conversation::reload)
+        Header(store, session, onBack, onPopOut, onDelete = { scope.launch { if (store.mutate("delete", args("sessionId" to sessionId)) != null) onDeleted() } }, onReload = conversation::reload)
         HorizontalDivider(color = p.line)
 
         val rows = remember(events) { rows(events) }
@@ -181,20 +175,6 @@ fun ConversationScreen(store: Store, sessionId: String, onBack: (() -> Unit)?, o
         Composer(store, session)
     }
 
-    if (confirmDelete) {
-        AlertDialog(
-            onDismissRequest = { confirmDelete = false },
-            title = { Text("Delete this conversation?") },
-            text = { Text("Its workspace is released and its transcript deleted on the server. This cannot be undone.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmDelete = false
-                    scope.launch { if (store.mutate("delete", args("sessionId" to sessionId)) != null) onDeleted() }
-                }) { Text("Delete", color = p.danger) }
-            },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
-        )
-    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -208,7 +188,6 @@ private fun Header(
     val scope = rememberCoroutineScope()
     var menu by remember { mutableStateOf(false) }
     fun act(name: String, vararg extra: Pair<String, Any?>) = scope.launch { store.mutate(name, args("sessionId" to session.id, *extra)) }
-    fun open(url: String) = runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)) }
 
     Row(Modifier.fillMaxWidth().background(p.sidebar).padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back", tint = p.ink) }
@@ -219,7 +198,7 @@ private fun Header(
                 Tag(store.projectTitle(session.repo))
                 Tag(listOf(session.provider, session.model, session.effort).filter { it.isNotBlank() }.joinToString(" · "))
                 session.branch?.let { Tag(it) }
-                session.pullNumber?.let { n -> Tag("PR #$n", Modifier.clickable(enabled = session.pullUrl != null) { session.pullUrl?.let(::open) }) }
+                session.pullNumber?.let { n -> Tag("PR #$n", Modifier.clickable(enabled = store.can("pull")) { Windows.openPanel(context, Pane.Pull(session.repo, n)) }) }
                 SessionList.cost(session.costUsd)?.let { Tag(it) }
             }
         }
@@ -234,8 +213,8 @@ private fun Header(
             DropdownMenu(menu, onDismissRequest = { menu = false }) {
                 fun item(text: String, enabled: Boolean = true, action: () -> Unit) =
                     @Composable { DropdownMenuItem(text = { Text(text) }, enabled = enabled, onClick = { menu = false; action() }) }
-                session.serveUrl?.let { url -> item("Open ▶ Run") { Windows.openPreview(context, url) }() }
-                session.pullUrl?.let { url -> item("Open the pull request") { open(url) }() }
+                if (session.serveUrl != null) item("Open ▶ Run") { Windows.openRun(context, session.id) }()
+                if (store.can("pull")) session.pullNumber?.let { number -> item("Open pull request in a new panel") { Windows.openPanel(context, Pane.Pull(session.repo, number)) }() }
                 if (store.can("review_loop")) item(if (session.reviewLoopOn) "Turn the review loop off" else "Turn the review loop on") {
                     act("review_loop", "on" to !session.reviewLoopOn)
                 }()
@@ -329,8 +308,15 @@ private fun TriageCard(store: Store, session: Session, triage: Triage) {
     val scope = rememberCoroutineScope()
     val chosen = remember(session.id) { mutableStateMapOf<String, String>() }
     var note by rememberSaveable(session.id) { mutableStateOf("") }
-    var confirm by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
+    fun complete() {
+        busy = true
+        scope.launch {
+            try {
+                store.mutate("complete_findings", args("sessionId" to session.id, "verdicts" to triage.verdicts(chosen).ifEmpty { null }, "note" to note.trim().ifEmpty { null }))
+            } finally { busy = false }
+        }
+    }
     val canDecide = store.can("complete_findings")
     Column(Modifier.fillMaxWidth().background(p.raise, RoundedCornerShape(14.dp)).border(1.dp, p.line, RoundedCornerShape(14.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(triage.title, style = MaterialTheme.typography.titleSmall, color = p.ink)
@@ -354,32 +340,8 @@ private fun TriageCard(store: Store, session: Session, triage: Triage) {
         }
         if (canDecide) {
             if (triage.mine) VoiceField(store, note, { note = it }, Modifier.fillMaxWidth(), placeholder = "Record a note for the pull request and the fix session (optional)", enabled = !busy)
-            Button(onClick = { confirm = true }, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(triage.completeLabel(chosen)) }
+            Button(onClick = ::complete, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(triage.completeLabel(chosen)) }
         }
-    }
-    if (confirm) {
-        val fixes = triage.fixes(chosen)
-        AlertDialog(
-            onDismissRequest = { confirm = false },
-            title = {
-                val plural = if (fixes == 1) "" else "s"
-                Text(if (!triage.mine) "Take this review off the queue?" else if (fixes == 0) "Complete with nothing to fix?" else "Start a paid fix session for $fixes finding$plural?")
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirm = false
-                    busy = true
-                    scope.launch {
-                        store.mutate(
-                            "complete_findings",
-                            args("sessionId" to session.id, "verdicts" to triage.verdicts(chosen).ifEmpty { null }, "note" to note.trim().ifEmpty { null }),
-                        )
-                        busy = false
-                    }
-                }) { Text("Complete") }
-            },
-            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } },
-        )
     }
 }
 
