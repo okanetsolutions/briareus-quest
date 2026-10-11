@@ -215,7 +215,7 @@ private fun Header(
         Column(Modifier.weight(1f).padding(horizontal = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(session.title, style = MaterialTheme.typography.titleMedium, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                StateBadge(session.state)
+                StateBadge(session)
                 Tag(store.projectTitle(session.repo))
                 Tag(listOf(session.provider, session.model, session.effort).filter { it.isNotBlank() }.joinToString(" · "))
                 session.branch?.let { Tag(it) }
@@ -312,7 +312,7 @@ private fun ToolCluster(events: List<TranscriptEvent>, expanded: Boolean, onTogg
 private fun Working(session: Session) {
     val p = LocalPalette.current
     Row(verticalAlignment = Alignment.CenterVertically) {
-        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = p.warn)
+        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = p.accent)
         val what = when (session.status) { "queued" -> "Queued"; "preparing" -> "Preparing the workspace"; else -> session.lastTool?.let { "Working · $it" } ?: "Working" }
         Text(what, Modifier.padding(start = 10.dp), style = MaterialTheme.typography.labelMedium, color = p.muted)
     }

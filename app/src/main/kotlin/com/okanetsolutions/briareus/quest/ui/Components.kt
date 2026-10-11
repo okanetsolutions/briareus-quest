@@ -19,16 +19,15 @@ import androidx.compose.ui.unit.dp
 import com.okanetsolutions.briareus.core.Session
 import com.okanetsolutions.briareus.quest.Store
 
+/**
+ * A session's dot: the shared status roles from the tokens (working in accent, ready in ok, failed in danger, closed in
+ * dot, interrupted and cancelled in warn), except that an idle session waiting for an answer or a findings decision
+ * takes warn, the "needs attention" role, rather than idle's ok.
+ */
 @Composable
-fun stateColor(state: Session.State): Color {
+fun stateColor(session: Session): Color {
     val p = LocalPalette.current
-    return when (state) {
-        Session.State.WAITING, Session.State.FINDINGS -> p.accent
-        Session.State.WORKING -> p.warn
-        Session.State.IDLE -> p.ok
-        Session.State.FAILED -> p.danger
-        Session.State.CLOSED -> p.lineStrong
-    }
+    return if (session.state.needsYou) p.warn else p.statusColor(session.status)
 }
 
 @Composable
@@ -37,8 +36,9 @@ fun Dot(color: Color, modifier: Modifier = Modifier, size: Int = 9) {
 }
 
 @Composable
-fun StateBadge(state: Session.State) {
-    val color = stateColor(state)
+fun StateBadge(session: Session) {
+    val state = session.state
+    val color = stateColor(session)
     Row(
         Modifier.border(1.dp, color.copy(alpha = 0.5f), RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -63,7 +63,7 @@ fun LinkIndicator(link: Store.Link) {
     val (color, text) = when (link) {
         Store.Link.LIVE -> p.ok to "Live"
         Store.Link.CONNECTING -> p.warn to "Connecting"
-        Store.Link.OFFLINE -> p.lineStrong to "Offline"
+        Store.Link.OFFLINE -> p.dot to "Offline"
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Dot(color, size = 7)
