@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- theme.dark.canvas from briareus-client-contracts. -->
+<resources>
+  <color name="canvas">#FF262624</color>
+</resources>

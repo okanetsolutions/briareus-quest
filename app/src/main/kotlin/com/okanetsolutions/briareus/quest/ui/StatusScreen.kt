@@ -59,8 +59,8 @@ fun StatusScreen(store: Store, onOpen: (String) -> Unit) {
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Count("Need you", counts.needsYou, p.accent, Modifier.weight(1f))
-                Count("Working", counts.working, p.warn, Modifier.weight(1f))
+                Count("Need you", counts.needsYou, p.warn, Modifier.weight(1f))
+                Count("Working", counts.working, p.accent, Modifier.weight(1f))
                 Count("Ready", counts.ready, p.ok, Modifier.weight(1f))
             }
         }
@@ -70,7 +70,7 @@ fun StatusScreen(store: Store, onOpen: (String) -> Unit) {
         items(working, key = { "r:" + it.id }) { s ->
             Column(Modifier.fillMaxWidth().background(p.raise, RoundedCornerShape(10.dp)).clickable { onOpen(s.id) }.padding(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Dot(p.warn)
+                    Dot(p.accent)
                     Text(s.title, Modifier.padding(start = 8.dp), style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Text(
@@ -110,10 +110,10 @@ private fun WaitingCard(store: Store, s: Session, onOpen: (String) -> Unit) {
     }
     Column(Modifier.fillMaxWidth().background(p.raise, RoundedCornerShape(12.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.clickable { onOpen(s.id) }, verticalAlignment = Alignment.CenterVertically) {
-            Dot(stateColor(s.state))
+            Dot(stateColor(s))
             Column(Modifier.padding(start = 8.dp)) {
                 Text(s.title, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("${store.projectTitle(s.repo)} · ${s.state.label}", style = MaterialTheme.typography.labelSmall, color = p.accent)
+                Text("${store.projectTitle(s.repo)} · ${s.state.label}", style = MaterialTheme.typography.labelSmall, color = p.warn)
             }
         }
         val text = question?.question ?: question?.text ?: s.lastText

@@ -246,7 +246,7 @@ private fun checksColor(rollup: String?): Color {
 @Composable
 private fun LabelChip(label: PullLabel, tint: Color? = null) {
     val p = LocalPalette.current
-    // GitHub's label colours are picked for a light page; lifted towards white they read on the dark panel.
+    // GitHub's label colours are raw hex picked for no particular background; pulled a third of the way to ink they read in both modes.
     val color = tint ?: label.argb?.let { lerpToInk(Color(it), p.ink) } ?: p.muted
     Text(
         label.name, Modifier.border(1.dp, color.copy(alpha = 0.6f), RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 2.dp),

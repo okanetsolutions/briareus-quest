@@ -166,8 +166,8 @@ private fun Sidebar(
                                 group.project.title, Modifier.weight(1f).padding(start = 6.dp), style = MaterialTheme.typography.titleSmall,
                                 color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
                             )
-                            if (group.working) Dot(p.warn, Modifier.padding(end = 8.dp))
-                            if (group.needsYou > 0) Text("${group.needsYou}", Modifier.padding(end = 8.dp), style = MaterialTheme.typography.labelMedium, color = p.accent)
+                            if (group.working) Dot(p.accent, Modifier.padding(end = 8.dp))
+                            if (group.needsYou > 0) Text("${group.needsYou}", Modifier.padding(end = 8.dp), style = MaterialTheme.typography.labelMedium, color = p.warn)
                             Text("${group.sessions.size}", style = MaterialTheme.typography.labelMedium, color = p.muted)
                         }
                     }
@@ -202,12 +202,12 @@ private fun SessionRow(s: Session, selected: Boolean, now: Instant, onClick: () 
             .clickable(onClick = onClick).heightIn(min = 56.dp).padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Dot(stateColor(s.state))
+        Dot(stateColor(s))
         Column(Modifier.weight(1f).padding(start = 12.dp)) {
             Text(s.title, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 listOfNotNull(if (s.state.needsYou) s.state.label else null, s.provider.ifBlank { null }, s.branch).joinToString(" · "),
-                style = MaterialTheme.typography.bodySmall, color = if (s.state.needsYou) p.accent else p.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodySmall, color = if (s.state.needsYou) p.warn else p.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         }
         Text(SessionList.age(s.endedAt ?: s.createdAt, now), style = MaterialTheme.typography.labelSmall, color = p.muted)
