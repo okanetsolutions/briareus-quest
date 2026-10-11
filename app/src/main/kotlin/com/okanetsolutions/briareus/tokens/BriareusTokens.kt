@@ -135,6 +135,51 @@ object BriareusLayout {
     val statusDot = 7.dp
 }
 
+/** The usage charts' categorical series: four slots, then the tail's grey. The same in both modes. */
+object BriareusChart {
+    val series = listOf(Color(0xFF3987E5), Color(0xFFD95926), Color(0xFF199E70), Color(0xFFC98500))
+    val other = Color(0xFF807B71)
+    val slots: Int get() = series.size
+    fun seriesColor(slot: Int): Color = if (slot in series.indices) series[slot] else other
+}
+
+/** The context-usage bar's colours, by the category names Claude's /context report uses. */
+@Immutable
+data class BriareusContextPalette(
+    val messages: Color,
+    val systemPrompt: Color,
+    val systemTools: Color,
+    val mcpTools: Color,
+    val skills: Color,
+    val memoryFiles: Color,
+    val customAgents: Color,
+    val deferred: Color,
+    val free: Color,
+    val unknown: Color,
+) {
+    companion object {
+        val Dark = BriareusContextPalette(messages = Color(0xFF6D9EF7), systemPrompt = Color(0xFFE06C75), systemTools = Color(0xFFD98A3F), mcpTools = Color(0xFF4FAE72), skills = Color(0xFFC96F9E), memoryFiles = Color(0xFF5FAE5F), customAgents = Color(0xFF8F7EE8), deferred = Color(0xFF5A5850), free = Color(0xFF3E3E3A), unknown = Color(0xFF8A867C))
+        val Light = BriareusContextPalette(messages = Color(0xFF4483F5), systemPrompt = Color(0xFFDC5B65), systemTools = Color(0xFFC37327), mcpTools = Color(0xFF449562), skills = Color(0xFFC66698), memoryFiles = Color(0xFF4C964C), customAgents = Color(0xFF8775E6), deferred = Color(0xFFC4C0B4), free = Color(0xFFE0DDD3), unknown = Color(0xFF8A867C))
+    }
+
+    /** A category's colour; the name is matched without regard to case. */
+    fun color(category: String?): Color {
+        val n = category.orEmpty().lowercase()
+        return when {
+            "deferred" in n || "autocompact" in n -> deferred
+            n == "messages" || n == "context" -> messages
+            n == "system prompt" -> systemPrompt
+            n == "system tools" -> systemTools
+            n == "mcp tools" -> mcpTools
+            n == "skills" -> skills
+            n == "memory files" -> memoryFiles
+            n == "custom agents" -> customAgents
+            n == "free space" -> free
+            else -> unknown
+        }
+    }
+}
+
 object BriareusMotion {
     const val PULSE_MILLIS = 1400
 }
