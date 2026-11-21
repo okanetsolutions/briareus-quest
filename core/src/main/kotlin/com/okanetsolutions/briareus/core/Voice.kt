@@ -47,7 +47,7 @@ object Voice {
         You also drive the app's panels. When the user says "show", "open", "bring up", "go to" or "let me see", use the \
         show_ tools: show_conversation puts a conversation in the main window (or in a panel of its own), \
         show_pull_requests puts a project's open pull requests there, show_pull_request one pull request (its \
-        description, checks, reviews, findings and commits; its files and anything asked for in the browser open on \
+        description, checks, reviews and commits; its files and anything asked for in the browser open on \
         GitHub beside the app), show_issue opens an issue in the browser, show_preview opens a conversation's running \
         app, show_new_conversation opens the form to start one (with a prompt filled in if the user dictated one), \
         show_status_panel opens the status panel, and go_home leaves the main window on the list. These only show things; they need no confirmation. When the user says "this", "that", "it" or \
@@ -168,7 +168,6 @@ object Voice {
             },
         )
         if (s.queued.isNotEmpty()) parts += "${s.queued.size} queued"
-        s.reviewTriage?.let { t -> t.array("findings")?.size?.let { parts += if (it == 1) "1 finding" else "$it findings" } }
         return parts.joinToString(" · ")
     }
 
@@ -402,7 +401,6 @@ enum class VoiceTool(val wire: String) {
     LIST_PULL_REQUESTS("list_pull_requests"),
     READ_PULL_REQUEST("read_pull_request"),
     MERGE_PULL_REQUEST("merge_pull_request"),
-    WAITING_FINDINGS("waiting_findings"),
     LIST_ISSUES("list_issues"),
     READ_ISSUE("read_issue"),
     START_CONVERSATION("start_conversation"),
@@ -422,7 +420,7 @@ enum class VoiceTool(val wire: String) {
     /** The client API call each server tool makes; null for the screen's own. */
     val operation: String?
         get() = when (this) {
-            LIST_CONVERSATIONS, WAITING_FINDINGS -> "sessions"
+            LIST_CONVERSATIONS -> "sessions"
             READ_CONVERSATION -> "session"
             LIST_PULL_REQUESTS, LIST_ISSUES -> "pulls"
             READ_ISSUE -> "issue"
@@ -467,10 +465,6 @@ enum class VoiceTool(val wire: String) {
                     add("number", "integer", "The pull request's number."); project(); confirmed()
                     "Merges one of a project's open pull requests into its base branch. The first call reads it and answers what to read back, with what stands in the way."
                 }
-                WAITING_FINDINGS -> {
-                    add("project", "string", "Only this project's, by name or repository. Omit for every project.", false)
-                    "The review rounds waiting for the user's decision."
-                }
                 LIST_ISSUES -> { project(); "A project's open issues with their labels, epic progress, the pull requests that close them and the conversations started on them." }
                 READ_ISSUE -> {
                     add("issue", "integer", "The issue's number, from list_issues or as the user said it."); project()
@@ -494,7 +488,7 @@ enum class VoiceTool(val wire: String) {
                 SHOW_CONVERSATION -> {
                     session()
                     add("own_panel", "boolean", "True to open it in a panel of its own beside the others instead of the main window, as when the user asks for a new or separate panel.", false)
-                    "Shows a conversation: its transcript, its question, its findings and its composer."
+                    "Shows a conversation: its transcript, its question and its composer."
                 }
                 SHOW_PULL_REQUESTS -> { project(); "Shows a project's open pull requests in the main window, with their checks, labels and actions." }
                 SHOW_PULL_REQUEST -> {
@@ -504,7 +498,7 @@ enum class VoiceTool(val wire: String) {
                         false, listOf("overview", "files", "checks", "commits"),
                     )
                     add("in_browser", "boolean", "True to open its page on GitHub in the browser beside the app instead of the main window.", false)
-                    "Shows one pull request in the main window: its status, description, checks, reviews, findings, linked issues and commits."
+                    "Shows one pull request in the main window: its status, description, checks, reviews, linked issues and commits."
                 }
                 SHOW_ISSUE -> { add("issue", "integer", "The issue's number."); project(); "Opens an issue's page in the browser beside the app." }
                 SHOW_PREVIEW -> { session(); "Opens what a conversation's ▶ Run serves, its running app, in the browser." }
@@ -540,7 +534,7 @@ enum class VoiceTool(val wire: String) {
             is Voice.Pick.Refuse -> VoicePlan.Refuse(p.why)
         }
         return when (this) {
-            LIST_CONVERSATIONS, WAITING_FINDINGS ->
+            LIST_CONVERSATIONS ->
                 if (named == null) VoicePlan.Call(JsonObject(emptyMap())) else inRepo { VoicePlan.Call(args("repo" to it)) }
             LIST_PULL_REQUESTS, LIST_ISSUES -> inRepo { VoicePlan.Call(args("repo" to it)) }
             READ_ISSUE -> number("issue")?.let { n -> inRepo { VoicePlan.Call(args("repo" to it, "issue" to n)) } } ?: VoicePlan.Refuse("issue is missing.")
@@ -638,9 +632,6 @@ enum class VoiceTool(val wire: String) {
             "enqueued" -> "Queued to merge into ${input.str("base") ?: "its base"}"
             "pending" -> "GitHub is finishing the merge into ${input.str("base") ?: "its base"}"
             else -> "Merged into ${input.str("base") ?: "its base"}"
-        })
-        WAITING_FINDINGS -> args("waiting" to Session.list(answer).filter { it.state == Session.State.FINDINGS }.map { s ->
-            mapOf("session_id" to s.id, "title" to s.title, "project" to titles(s.repo), "findings" to (s.reviewTriage?.array("findings")?.size ?: 0))
         })
         LIST_ISSUES -> {
             val issues = answer.objects("issues").filter { it.int("number") != null }

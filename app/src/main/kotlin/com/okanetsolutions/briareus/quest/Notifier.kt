@@ -29,7 +29,7 @@ object Notifier {
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(
             NotificationChannel(CHANNEL_ALERTS, "Sessions that need you", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "A question from an agent, a finished turn, findings to decide or a failure."
+                description = "A question from an agent, a finished turn or a failure."
             },
         )
         manager.createNotificationChannel(

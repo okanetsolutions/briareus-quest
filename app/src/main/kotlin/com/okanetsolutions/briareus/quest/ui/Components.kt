@@ -23,7 +23,7 @@ import com.okanetsolutions.briareus.quest.Store
 fun stateColor(state: Session.State): Color {
     val p = LocalPalette.current
     return when (state) {
-        Session.State.WAITING, Session.State.FINDINGS -> p.accent
+        Session.State.WAITING -> p.accent
         Session.State.WORKING -> p.warn
         Session.State.IDLE -> p.ok
         Session.State.FAILED -> p.danger

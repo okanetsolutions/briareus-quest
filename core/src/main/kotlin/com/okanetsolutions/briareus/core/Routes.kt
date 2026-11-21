@@ -36,7 +36,6 @@ object Routes {
         ApiRoute("pull", "GET", "pulls/{pr}"),
         ApiRoute("pull_description", "GET", "pulls/{pr}/description"),
         ApiRoute("pull_files", "GET", "pulls/{pr}/files"),
-        ApiRoute("findings", "GET", "pulls/{pr}/findings"),
         ApiRoute("merge_pull", "POST", "pulls/{pr}/merge"),
         ApiRoute("serve_pull", "POST", "pulls/{pr}/serve"),
         // The Cloudflare Access service token ▶ Run's preview hosts take, so the preview opens without a sign-in.
@@ -55,8 +54,6 @@ object Routes {
         ApiRoute("cancel", "POST", "sessions/{sessionId}/cancel"),
         ApiRoute("close", "POST", "sessions/{sessionId}/close"),
         ApiRoute("reopen", "POST", "sessions/{sessionId}/reopen"),
-        ApiRoute("review_loop", "POST", "sessions/{sessionId}/review-loop"),
-        ApiRoute("complete_findings", "POST", "sessions/{sessionId}/findings/triage"),
         // Composer. These two send raw bytes; the entries say whether the server has them.
         ApiRoute("upload", "POST", "uploads"),
         ApiRoute("transcribe", "POST", "transcribe"),

@@ -14,7 +14,7 @@ class RoutesTest {
             "/sessions/{id}":{"get":{"x-briareus-access":"read"},"delete":{"x-briareus-access":"manage"}},
             "/sessions/{id}/messages":{"post":{"x-briareus-access":"manage"}},
             "/settings/projects":{"get":{}},
-            "/pulls/{number}/findings":{"get":{"x-briareus-access":"read"}},
+            "/pulls/{number}/files":{"get":{"x-briareus-access":"read"}},
             "/pulls/merged":{"get":{"x-briareus-access":"admin"}}
         }}""",
     ) as JsonObject
@@ -26,7 +26,7 @@ class RoutesTest {
         assertTrue(catalog.allows("start_session", Permission.MANAGE))
         assertTrue(catalog.allows("message", Permission.ADMIN))
         // A parameter named differently on each side still matches.
-        assertTrue(catalog.allows("findings", Permission.READ))
+        assertTrue(catalog.allows("pull_files", Permission.READ))
         // A route the server does not list is unavailable to everyone.
         assertFalse(catalog.allows("transcribe", Permission.ADMIN))
         // Without x-briareus-access a route is the operator's.

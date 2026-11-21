@@ -37,7 +37,6 @@ class ModelsTest {
     @Test fun sessionState() {
         fun s(extra: String) = Session(json("""{"id":"s","repo":"o/a","title":"T",$extra}"""))
         assertEquals(Session.State.WAITING, s(""""status":"idle","awaitingAnswer":true""").state)
-        assertEquals(Session.State.FINDINGS, s(""""status":"idle","reviewTriage":{"findings":[]}""").state)
         assertEquals(Session.State.IDLE, s(""""status":"idle"""").state)
         assertEquals(Session.State.WORKING, s(""""status":"preparing"""").state)
         assertEquals(Session.State.FAILED, s(""""status":"failed"""").state)

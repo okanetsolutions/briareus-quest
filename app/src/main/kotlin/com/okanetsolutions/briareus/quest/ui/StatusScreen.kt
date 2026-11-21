@@ -118,9 +118,7 @@ private fun WaitingCard(store: Store, s: Session, onOpen: (String) -> Unit) {
         }
         val text = question?.question ?: question?.text ?: s.lastText
         if (text != null) Text(text, style = MaterialTheme.typography.bodySmall, color = p.muted, maxLines = 5, overflow = TextOverflow.Ellipsis)
-        if (s.state == Session.State.FINDINGS) {
-            TextButton(onClick = { onOpen(s.id) }) { Text("Decide the findings →") }
-        } else if (store.can("message")) {
+        if (store.can("message")) {
             question?.options?.takeIf { it.isNotEmpty() }?.let { options ->
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     options.forEach { OutlinedButton(onClick = { send(it) }, enabled = !sending, modifier = Modifier.heightIn(min = 44.dp)) { Text(it) } }

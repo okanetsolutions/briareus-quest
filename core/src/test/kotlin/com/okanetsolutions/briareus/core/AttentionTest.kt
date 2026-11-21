@@ -26,14 +26,10 @@ class AttentionTest {
         assertNull(t.update(s("idle")))
     }
 
-    @Test fun questionsFindingsAndFailures() {
+    @Test fun questionsAndFailures() {
         val t = AttentionTracker()
         t.update(s("running"))
         assertEquals(Alert.Kind.QUESTION, t.update(s("idle", ""","awaitingAnswer":true"""))!!.kind)
-        t.update(s("running"))
-        val findings = t.update(s("idle", ""","reviewTriage":{"findings":[{},{}]}"""))!!
-        assertEquals(Alert.Kind.FINDINGS, findings.kind)
-        assertEquals("A review found 2 findings to decide.", findings.text)
         t.update(s("running"))
         assertEquals(Alert.Kind.FAILED, t.update(s("failed", ""","error":"Out of credit""""))!!.kind)
     }
