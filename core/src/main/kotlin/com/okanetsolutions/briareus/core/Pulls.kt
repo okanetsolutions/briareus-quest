@@ -152,17 +152,3 @@ data class PullOverview(val raw: JsonObject) {
         fun parse(o: JsonObject): PullOverview? = o.obj("pr")?.takeIf { it.int("number") != null }?.let(::PullOverview)
     }
 }
-
-/** A finding a Briareus review declared on a pull request (`GET /pulls/{number}/findings`). */
-data class PullFinding(val key: String, val severity: String, val title: String, val file: String?, val line: Int?, val url: String?, val decision: String?, val fixed: Boolean) {
-    val where: String? get() = file?.let { f -> line?.let { "$f:$it" } ?: f }
-
-    companion object {
-        fun list(o: JsonObject): List<PullFinding> = o.objects("findings").mapNotNull { f ->
-            PullFinding(
-                f.nonEmpty("key") ?: return@mapNotNull null, f.str("severity").orEmpty(), f.str("title").orEmpty(),
-                f.nonEmpty("file"), f.int("line"), f.nonEmpty("url"), f.nonEmpty("decision"), f.bool("fixed") == true,
-            )
-        }
-    }
-}

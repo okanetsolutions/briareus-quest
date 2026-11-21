@@ -35,7 +35,6 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -46,9 +45,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -73,7 +69,6 @@ import com.okanetsolutions.briareus.core.ApiClient
 import com.okanetsolutions.briareus.core.Session
 import com.okanetsolutions.briareus.core.SessionList
 import com.okanetsolutions.briareus.core.TranscriptEvent
-import com.okanetsolutions.briareus.core.Triage
 import com.okanetsolutions.briareus.core.args
 import com.okanetsolutions.briareus.quest.Notifier
 import com.okanetsolutions.briareus.quest.Store
@@ -107,7 +102,7 @@ private fun rows(events: List<TranscriptEvent>): List<Row> {
 
 /**
  * One conversation: its header and actions, the transcript as it streams in, the question the agent waits on with its
- * options as buttons, held findings, the queue, and the composer with voice notes and attachments.
+ * options as buttons, the queue, and the composer with voice notes and attachments.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -156,7 +151,6 @@ fun ConversationScreen(store: Store, sessionId: String, onBack: (() -> Unit)?, o
             if (rows.isNotEmpty() && count > 0 && (atBottom || list.firstVisibleItemIndex == 0)) list.scrollToItem(count - 1)
         }
 
-        val triage = remember(session.raw) { Triage.of(session) }
         val pending = remember(events, session.raw) { if (session.awaitingAnswer) conversation.pendingQuestion() else null }
 
         LazyColumn(
@@ -174,7 +168,6 @@ fun ConversationScreen(store: Store, sessionId: String, onBack: (() -> Unit)?, o
             }
             if (session.isActive) item(key = "working") { Working(session) }
             session.error?.takeIf { session.status == "failed" }?.let { error -> item(key = "error") { Notice(error, p.danger) } }
-            if (triage != null) item(key = "triage") { TriageCard(store, session, triage) }
         }
 
         Queue(store, session)
@@ -236,9 +229,6 @@ private fun Header(
                     @Composable { DropdownMenuItem(text = { Text(text) }, enabled = enabled, onClick = { menu = false; action() }) }
                 session.serveUrl?.let { url -> item("Open ▶ Run") { Windows.openPreview(context, url) }() }
                 session.pullUrl?.let { url -> item("Open the pull request") { open(url) }() }
-                if (store.can("review_loop")) item(if (session.reviewLoopOn) "Turn the review loop off" else "Turn the review loop on") {
-                    act("review_loop", "on" to !session.reviewLoopOn)
-                }()
                 if (session.isClosed) item("Reopen", store.can("reopen")) { act("reopen") }()
                 else item("Close", store.can("close") && !session.isActive) { act("close") }()
                 item("Read the transcript again", action = onReload)()
@@ -321,66 +311,6 @@ private fun Working(session: Session) {
 @Composable
 private fun Notice(text: String, color: androidx.compose.ui.graphics.Color) {
     Text(text, Modifier.fillMaxWidth().border(1.dp, color, RoundedCornerShape(10.dp)).padding(14.dp), color = color, style = MaterialTheme.typography.bodyMedium)
-}
-
-@Composable
-private fun TriageCard(store: Store, session: Session, triage: Triage) {
-    val p = LocalPalette.current
-    val scope = rememberCoroutineScope()
-    val chosen = remember(session.id) { mutableStateMapOf<String, String>() }
-    var note by rememberSaveable(session.id) { mutableStateOf("") }
-    var confirm by remember { mutableStateOf(false) }
-    var busy by remember { mutableStateOf(false) }
-    val canDecide = store.can("complete_findings")
-    Column(Modifier.fillMaxWidth().background(p.raise, RoundedCornerShape(14.dp)).border(1.dp, p.line, RoundedCornerShape(14.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(triage.title, style = MaterialTheme.typography.titleSmall, color = p.ink)
-        triage.findings.forEach { f ->
-            HorizontalDivider(color = p.line)
-            Text(listOfNotNull(f.severity?.uppercase(), f.title).joinToString(" · "), style = MaterialTheme.typography.bodyMedium, color = p.ink)
-            f.location?.let { Text(it, style = MaterialTheme.typography.labelSmall.copy(fontFamily = Mono), color = p.muted) }
-            f.parkedWhy?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.muted) }
-            val key = f.key
-            if (triage.mine && key != null) {
-                val selected = chosen[key] ?: f.draft
-                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                    Triage.DECISIONS.forEachIndexed { i, (value, label) ->
-                        SegmentedButton(
-                            selected = selected == value, enabled = canDecide && !busy, onClick = { chosen[key] = value },
-                            shape = SegmentedButtonDefaults.itemShape(i, Triage.DECISIONS.size),
-                        ) { Text(label) }
-                    }
-                }
-            }
-        }
-        if (canDecide) {
-            if (triage.mine) VoiceField(store, note, { note = it }, Modifier.fillMaxWidth(), placeholder = "Record a note for the pull request and the fix session (optional)", enabled = !busy)
-            Button(onClick = { confirm = true }, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(triage.completeLabel(chosen)) }
-        }
-    }
-    if (confirm) {
-        val fixes = triage.fixes(chosen)
-        AlertDialog(
-            onDismissRequest = { confirm = false },
-            title = {
-                val plural = if (fixes == 1) "" else "s"
-                Text(if (!triage.mine) "Take this review off the queue?" else if (fixes == 0) "Complete with nothing to fix?" else "Start a paid fix session for $fixes finding$plural?")
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirm = false
-                    busy = true
-                    scope.launch {
-                        store.mutate(
-                            "complete_findings",
-                            args("sessionId" to session.id, "verdicts" to triage.verdicts(chosen).ifEmpty { null }, "note" to note.trim().ifEmpty { null }),
-                        )
-                        busy = false
-                    }
-                }) { Text("Complete") }
-            },
-            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } },
-        )
-    }
 }
 
 @Composable

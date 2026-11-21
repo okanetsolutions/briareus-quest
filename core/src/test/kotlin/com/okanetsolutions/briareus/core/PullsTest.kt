@@ -77,10 +77,4 @@ class PullsTest {
         assertEquals("First", pr.commits.single().message)
         assertNull(PullOverview.parse(json("""{"pr":{}}""")))
     }
-
-    @Test fun readsFindings() {
-        val f = PullFinding.list(json("""{"findings":[{"key":"k","severity":"high","title":"Bug","file":"a.kt","line":4,"decision":"fix","fixed":false},{"title":"no key"}]}""")).single()
-        assertEquals("a.kt:4", f.where)
-        assertEquals("fix", f.decision)
-    }
 }

@@ -38,7 +38,7 @@ Nothing touches the network. `FakeServer` in `ApiClientTest.kt` is an OkHttp `In
 `ApiClient.defaultHttpClient().newBuilder().addInterceptor(server).build()`. Assert the method, path, query and body of
 every call you add: the suite is the contract with the server.
 
-Pure rules (`AttentionTracker`, `SessionList`, `Markdown`, `Triage`, `ServerAddress`, `RouteCatalog`) are tested
+Pure rules (`AttentionTracker`, `SessionList`, `Markdown`, `ServerAddress`, `RouteCatalog`) are tested
 directly with their inputs, no fakes needed.
 
 ## What a change must ship with

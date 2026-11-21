@@ -59,7 +59,6 @@ import androidx.core.net.toUri
 import com.okanetsolutions.briareus.core.ApiError
 import com.okanetsolutions.briareus.core.Board
 import com.okanetsolutions.briareus.core.Errand
-import com.okanetsolutions.briareus.core.PullFinding
 import com.okanetsolutions.briareus.core.PullLabel
 import com.okanetsolutions.briareus.core.PullOverview
 import com.okanetsolutions.briareus.core.PullRow
@@ -385,7 +384,7 @@ private fun openBeside(context: Context, url: String) {
 
 // MARK: - One pull request
 
-/** One pull request in full: where it stands, its description, checks, reviews, linked issues, commits and findings. */
+/** One pull request in full: where it stands, its description, checks, reviews, linked issues and commits. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PullScreen(store: Store, repo: String, number: Int, onPane: (Pane?) -> Unit) {
@@ -394,7 +393,6 @@ fun PullScreen(store: Store, repo: String, number: Int, onPane: (Pane?) -> Unit)
     val sessions by store.sessions.collectAsState()
     var pr by remember(repo, number) { mutableStateOf<PullOverview?>(null) }
     var body by remember(repo, number) { mutableStateOf<String?>(null) }
-    var findings by remember(repo, number) { mutableStateOf<List<PullFinding>?>(null) }
     var errands by remember { mutableStateOf<List<Errand>>(emptyList()) }
     var error by remember(repo, number) { mutableStateOf<String?>(null) }
     var reload by remember { mutableIntStateOf(0) }
@@ -415,7 +413,6 @@ fun PullScreen(store: Store, repo: String, number: Int, onPane: (Pane?) -> Unit)
             error = (e as? ApiError)?.description ?: e.message ?: "The pull request could not be read."
         }
         if (store.can("pull_description")) runCatching { body = c.call("pull_description", a).obj("pr")?.str("body").orEmpty() }
-        if (store.can("findings")) runCatching { findings = PullFinding.list(c.call("findings", a)) }
     }
 
     Column(Modifier.fillMaxSize().background(p.canvas)) {
@@ -472,23 +469,6 @@ fun PullScreen(store: Store, repo: String, number: Int, onPane: (Pane?) -> Unit)
                         Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text("@${r.user}", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = p.ink)
                             Text(r.label, style = MaterialTheme.typography.labelMedium, color = if (r.state == "APPROVED") p.ok else if (r.state == "CHANGES_REQUESTED") p.danger else p.muted)
-                        }
-                    }
-                }
-                findings?.let { list ->
-                    Section("Findings") {
-                        if (list.isEmpty()) Text("No findings reported.", color = p.muted)
-                        list.forEach { f ->
-                            Column(Modifier.fillMaxWidth().clickable(enabled = f.url != null) { f.url?.let { openBeside(context, it) } }.padding(vertical = 6.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(f.severity.uppercase(), style = MaterialTheme.typography.labelSmall, color = if (f.severity == "critical" || f.severity == "high") p.danger else p.warn)
-                                    Text(f.title, Modifier.weight(1f).padding(start = 8.dp), style = MaterialTheme.typography.bodyMedium, color = p.ink)
-                                }
-                                Text(
-                                    listOfNotNull(f.where, if (f.fixed) "fixed" else f.decision).joinToString(" · "),
-                                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = Mono), color = p.muted,
-                                )
-                            }
                         }
                     }
                 }

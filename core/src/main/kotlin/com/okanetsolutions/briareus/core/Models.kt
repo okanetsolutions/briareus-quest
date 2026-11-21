@@ -117,8 +117,6 @@ data class Session(val raw: JsonObject) {
     val parentId: String? get() = raw.nonEmpty("parentId")
     val createdAt: Instant? get() = parseTime(raw.str("createdAt"))
     val endedAt: Instant? get() = parseTime(raw.str("endedAt"))
-    val reviewTriage: JsonObject? get() = raw.obj("reviewTriage")
-    val reviewLoopOn: Boolean get() = raw.obj("reviewLoop") != null
     val pullNumber: Int? get() = raw.obj("prStatus")?.int("number")
     val pullUrl: String? get() = raw.obj("prStatus")?.nonEmpty("url")
     val serveUrl: String? get() = raw.array("serveLinks")?.filterIsInstance<JsonObject>()?.firstNotNullOfOrNull { it.nonEmpty("url") }
@@ -137,7 +135,6 @@ data class Session(val raw: JsonObject) {
     val state: State
         get() = when {
             status == "idle" && awaitingAnswer -> State.WAITING
-            status == "idle" && reviewTriage != null -> State.FINDINGS
             isActive -> State.WORKING
             status == "idle" -> State.IDLE
             status == "failed" -> State.FAILED
@@ -145,10 +142,10 @@ data class Session(val raw: JsonObject) {
         }
 
     enum class State(val label: String) {
-        WAITING("Needs your answer"), FINDINGS("Findings to decide"), WORKING("Working"), IDLE("Ready"), FAILED("Failed"), CLOSED("Closed");
+        WAITING("Needs your answer"), WORKING("Working"), IDLE("Ready"), FAILED("Failed"), CLOSED("Closed");
 
-        /** Whether the session waits for its user: an answer, a decision, or a message after a finished turn. */
-        val needsYou: Boolean get() = this == WAITING || this == FINDINGS
+        /** Whether the session waits for its user's answer. */
+        val needsYou: Boolean get() = this == WAITING
     }
 
     companion object {

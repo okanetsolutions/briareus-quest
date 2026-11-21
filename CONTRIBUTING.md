@@ -28,7 +28,7 @@ android.aapt2FromMavenOverride=/path/to/aapt2
 ./gradlew check -Pwerror
 ```
 
-runs the core tests, detekt on both modules and the app's lint. Everything under `core/` (address and token rules, the `/api/v1` client, route catalog, models, transcript, event streams, notification rules, Markdown, findings) has no Android code and is covered by `core/src/test`, with HTTP stubbed through an OkHttp interceptor. New core behaviour needs a test there. UI changes in `app/` are checked by running the app on a headset against a Briareus server; a screenshot in the pull request helps.
+runs the core tests, detekt on both modules and the app's lint. Everything under `core/` (address and token rules, the `/api/v1` client, route catalog, models, transcript, event streams, notification rules, Markdown, the voice mode) has no Android code and is covered by `core/src/test`, with HTTP stubbed through an OkHttp interceptor. New core behaviour needs a test there. UI changes in `app/` are checked by running the app on a headset against a Briareus server; a screenshot in the pull request helps.
 
 The same checks run in CI for every pull request, and every one must pass:
 

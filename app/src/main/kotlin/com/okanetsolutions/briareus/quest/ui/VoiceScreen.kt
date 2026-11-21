@@ -252,7 +252,6 @@ private val VoiceSession.Step.title: String
             VoiceTool.LIST_PULL_REQUESTS -> "Read the pull requests"
             VoiceTool.READ_PULL_REQUEST -> "Read the changes of #${n("number")}"
             VoiceTool.MERGE_PULL_REQUEST -> (if (waiting) "Asked to merge #" else "Merge #") + n("number")
-            VoiceTool.WAITING_FINDINGS -> "Read the findings waiting"
             VoiceTool.LIST_ISSUES -> "Read the issues"
             VoiceTool.READ_ISSUE -> "Read issue #${n("issue")}"
             VoiceTool.START_CONVERSATION -> (if (waiting) "Asked to start an agent: " else "Start an agent: ") + s("prompt")
