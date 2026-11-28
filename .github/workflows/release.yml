@@ -50,7 +50,7 @@ jobs:
             echo "name=$version"
             echo "code=$((major * 10000 + minor * 100 + ${patch:-0}))"
           } >> "$GITHUB_OUTPUT"
-      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: temurin
           java-version: 21
@@ -76,7 +76,7 @@ jobs:
             ./gradlew :core:test assembleDebug "${props[@]}" --console=plain
             cp app/build/outputs/apk/debug/app-debug.apk dist/Briareus-quest.apk
           fi
-      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+      - uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: Briareus for Quest ${{ steps.version.outputs.tag }}
